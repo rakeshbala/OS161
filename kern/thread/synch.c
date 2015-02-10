@@ -171,8 +171,7 @@ lock_create(const char *name)
             return NULL;
         }
         /************ RB:Init spin locks ************/
-        spinlock_init(&lock->lock_lk); 
-        
+        spinlock_init(&lock->lock_lk);
         return lock;
 }
 
