@@ -30,7 +30,7 @@
 /*
  * Main . -ramyarao@buffalo.edu
  */
-
+/* Main starts here --ramyarao@buffalo.edu*/
 #include <types.h>
 #include <kern/errno.h>
 #include <kern/reboot.h>
@@ -100,7 +100,7 @@ boot(void)
 	kprintf("%s", harvard_copyright);
 	kprintf("\n");
 
-	kprintf("Put-your-group-name-here's system version %s (%s #%d)\n", 
+	kprintf("Rakesh and Ramya's system version %s (%s #%d)\n", 
 		GROUP_VERSION, buildconfig, buildversion);
 	kprintf("\n");
 
