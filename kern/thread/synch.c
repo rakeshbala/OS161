@@ -87,7 +87,7 @@ sem_destroy(struct semaphore *sem)
         kfree(sem);
 }
 
-void 
+void
 P(struct semaphore *sem)
 {
         KASSERT(sem != NULL);
@@ -172,6 +172,7 @@ lock_create(const char *name)
         }
         /************ RB:Init spin locks ************/
         spinlock_init(&lock->lock_lk);
+
         return lock;
 }
 
@@ -258,10 +259,9 @@ cv_create(const char *name)
                 kfree(cv);
                 return NULL;
         }
-        
-        // add stuff here as needed
+
         /*********** RR: creating wchan for CV ***********/
-        
+
         cv->cv_wchan = wchan_create(cv->cv_name);
         if(cv->cv_wchan == NULL) {
             kfree(cv->cv_name);
@@ -276,7 +276,6 @@ cv_destroy(struct cv *cv)
 {
         KASSERT(cv != NULL);
 
-        // add stuff here as needed
         /*********** RR: free wchan memory ***********/
         wchan_destroy(cv->cv_wchan);
         kfree(cv->cv_name);
@@ -288,7 +287,7 @@ cv_wait(struct cv *cv, struct lock *lock)
 {
 
     /***********************************************
-    RR: lock the wchan,release the lock passed, 
+    RR: lock the wchan,release the lock passed,
     sleep on wchan,when woken up, reacquire the lock
     ************************************************/
     KASSERT(lock != NULL);
@@ -297,8 +296,6 @@ cv_wait(struct cv *cv, struct lock *lock)
     lock_release(lock);
     wchan_sleep(cv->cv_wchan);
     lock_acquire(lock);
-    // (void)cv;    // suppress warning until code gets written
-    // (void)lock;  // suppress warning until code gets written
 }
 
 void
@@ -313,15 +310,13 @@ cv_signal(struct cv *cv, struct lock *lock)
     // lock_acquire(lock);
     wchan_wakeone(cv->cv_wchan);
     // lock_release(lock);
-	// (void)cv;    // suppress warning until code gets written
-	// (void)lock;  // suppress warning until code gets written
 }
 
 void
 cv_broadcast(struct cv *cv, struct lock *lock)
 {
 	/******************************************************
-    RR: acquire lock on wchan, wake all signals, 
+    RR: acquire lock on wchan, wake all signals,
     release lock on wchan
     *******************************************************/
     KASSERT(lock != NULL);
@@ -329,6 +324,86 @@ cv_broadcast(struct cv *cv, struct lock *lock)
     // lock_acquire(lock);
     wchan_wakeall(cv->cv_wchan);
     // lock_release(lock);
-	// (void)cv;    // suppress warning until code gets written
-	// (void)lock;  // suppress warning until code gets written
+}
+
+
+/************ RB: Read write locks ************/
+/* Ref: http://jhshi.me/2013/04/05/os161-synchronization-primitives-rwlock/ */
+struct rwlock * rwlock_create(const char * name){
+        struct rwlock * rw_lock;
+
+        rw_lock = kmalloc(sizeof(struct rwlock));
+        if (rw_lock == NULL)
+        {
+            return NULL;
+        }
+
+        rw_lock->rwlock_name = kstrdup(name);
+        if (rw_lock->rwlock_name == NULL)
+        {
+            kfree(rw_lock);
+            return NULL;
+        }
+        rw_lock->rw_maxread=5;;
+        rw_lock->rwlock_sem = sem_create(rw_lock->rwlock_name, rw_lock->rw_maxread);
+        if (rw_lock->rwlock_sem == NULL)
+        {
+            kfree(rw_lock->rwlock_name);
+            kfree(rw_lock);
+            return NULL;
+        }
+
+        // rw_lock->rwlock_wchan = wchan_create(rw_lock->rwlock_name);
+        // if (rw_lock->rwlock_wchan == NULL)
+        // {
+        //     sem_destroy(rw_lock->rwlock_sem);
+        //     kfree(rw_lock->rwlock_name);
+        //     kfree(rw_lock);
+        //     return NULL;
+        // }
+
+        rw_lock->rwlock_lock = lock_create(rw_lock->rwlock_name);
+        if (rw_lock->rwlock_lock == NULL)
+        {
+            sem_destroy(rw_lock->rwlock_sem);
+            kfree(rw_lock->rwlock_name);
+            kfree(rw_lock);
+            return NULL;
+        }
+
+
+
+        return  rw_lock;
+}
+void rwlock_destroy(struct rwlock * rwlk){
+
+        KASSERT(rwlk != NULL);
+        kfree(rwlk->rwlock_name);
+        sem_destroy(rwlk->rwlock_sem);
+        lock_destroy(rwlk->rwlock_lock);
+        kfree(rwlk);
+}
+
+void rwlock_acquire_read(struct rwlock * rwlk){
+        lock_acquire(rwlk->rwlock_lock);
+        P(rwlk->rwlock_sem);
+        lock_release(rwlk->rwlock_lock);
+}
+void rwlock_release_read(struct rwlock * rwlk){
+        V(rwlk->rwlock_sem);
+}
+void rwlock_acquire_write(struct rwlock * rwlk){
+        lock_acquire(rwlk->rwlock_lock);
+        for (int i = 0; i < rwlk->rw_maxread; ++i)
+        {
+            P(rwlk->rwlock_sem);
+        }
+        lock_release(rwlk->rwlock_lock);
+
+}
+void rwlock_release_write(struct rwlock * rwlk){
+        for (int i = 0; i < rwlk->rw_maxread; ++i)
+        {
+            V(rwlk->rwlock_sem);
+        }
 }
