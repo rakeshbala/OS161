@@ -307,9 +307,8 @@ cv_signal(struct cv *cv, struct lock *lock)
     *****************************************************/
     KASSERT(lock != NULL);
     KASSERT(cv != NULL);
-    // lock_acquire(lock);
+    KASSERT(curthread == lock->lock_holder);
     wchan_wakeone(cv->cv_wchan);
-    // lock_release(lock);
 }
 
 void
@@ -321,9 +320,8 @@ cv_broadcast(struct cv *cv, struct lock *lock)
     *******************************************************/
     KASSERT(lock != NULL);
     KASSERT(cv != NULL);
-    // lock_acquire(lock);
+    KASSERT(curthread == lock->lock_holder);
     wchan_wakeall(cv->cv_wchan);
-    // lock_release(lock);
 }
 
 

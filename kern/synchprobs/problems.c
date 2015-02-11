@@ -135,9 +135,7 @@ matchmaker(void *p, unsigned long which)
   (void)which;
 
   matchmaker_start();
-	// Implement this function
    lock_acquire(whaleLock);
-  // Implement this function
   if (wchan_isempty(femaleCv->cv_wchan) || wchan_isempty(maleCv->cv_wchan))
   {
       cv_wait(matchMakerCv,whaleLock);
@@ -181,11 +179,20 @@ matchmaker(void *p, unsigned long which)
  * functions in drivers.c.
  */
 
+ static struct lock *zero;
+ static struct lock *one;
+ static struct lock *two;
+ static struct lock *three;
+
 // 13 Feb 2012 : GWA : Adding at the suggestion of Isaac Elbaz. These
 // functions will allow you to do local initialization. They are called at
 // the top of the corresponding driver code.
 
 void stoplight_init() {
+  zero = lock_create("zero");
+  one = lock_create("one");
+  two = lock_create("two");
+  three = lock_create("three");
   return;
 }
 
@@ -193,6 +200,10 @@ void stoplight_init() {
 // care if your problems leak memory, but if you do, use this to clean up.
 
 void stoplight_cleanup() {
+  lock_destroy(zero);
+  lock_destroy(one);
+  lock_destroy(two);
+  lock_destroy(three);
   return;
 }
 
@@ -201,6 +212,8 @@ gostraight(void *p, unsigned long direction)
 {
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
   (void)direction;
+
+
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
@@ -231,3 +244,6 @@ turnright(void *p, unsigned long direction)
   V(stoplightMenuSemaphore);
   return;
 }
+
+// void
+// lock_quadrants
