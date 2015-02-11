@@ -84,10 +84,10 @@ male(void *p, unsigned long which)
 	// Implement this function
   if (wchan_isempty(femaleCv->cv_wchan) || wchan_isempty(matchMakerCv->cv_wchan))
   {
-      cv_wait(maleCv,whaleLock);
+    cv_wait(maleCv,whaleLock);
   }else{
-       cv_signal(femaleCv,whaleLock);
-       cv_signal(matchMakerCv,whaleLock);
+   cv_signal(femaleCv,whaleLock);
+   cv_signal(matchMakerCv,whaleLock);
   }
   lock_release(whaleLock);
   male_end();
