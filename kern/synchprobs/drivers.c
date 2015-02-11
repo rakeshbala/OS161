@@ -133,7 +133,7 @@ int whalemating(int nargs, char **args) {
  * considered in quadrant 0 until you call inQuadrant(3). After you call
  * inQuadrant(2), the car is considered in quadrant 2 until you call
  * leaveIntersection().
- * 
+ *
  * As in the whalemating example, we will use the output from these functions
  * to verify the correctness of your solution. These functions may spin for
  * arbitrary periods of time or yield.

@@ -35,7 +35,7 @@
 #include <thread.h>
 #include <test.h>
 #include <synch.h>
-
+#include <wchan.h>
 /*
  * 08 Feb 2012 : GWA : Driver code is in kern/synchprobs/driver.c. We will
  * replace that file. This file is yours to modify as you see fit.
@@ -47,7 +47,17 @@
 // functions will allow you to do local initialization. They are called at
 // the top of the corresponding driver code.
 
+ /************ RB: Make the match here ************/
+static struct cv *maleCv;
+static struct cv *femaleCv;
+static struct cv *matchMakerCv;
+static struct lock *whaleLock;
+
 void whalemating_init() {
+  maleCv = cv_create("male");
+  femaleCv = cv_create("female");
+  matchMakerCv = cv_create("matchMaker");
+  whaleLock = lock_create("whaleLock");
   return;
 }
 
@@ -55,17 +65,31 @@ void whalemating_init() {
 // care if your problems leak memory, but if you do, use this to clean up.
 
 void whalemating_cleanup() {
+  lock_destroy(whaleLock);
+  cv_destroy(maleCv);
+  cv_destroy(femaleCv);
+  cv_destroy(matchMakerCv);
   return;
 }
+
 
 void
 male(void *p, unsigned long which)
 {
 	struct semaphore * whalematingMenuSemaphore = (struct semaphore *)p;
   (void)which;
-  
+
   male_start();
-	// Implement this function 
+  lock_acquire(whaleLock);
+	// Implement this function
+  if (wchan_isempty(femaleCv->cv_wchan) || wchan_isempty(matchMakerCv->cv_wchan))
+  {
+      cv_wait(maleCv,whaleLock);
+  }else{
+       cv_signal(femaleCv,whaleLock);
+       cv_signal(matchMakerCv,whaleLock);
+  }
+  lock_release(whaleLock);
   male_end();
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
@@ -79,27 +103,51 @@ female(void *p, unsigned long which)
 {
 	struct semaphore * whalematingMenuSemaphore = (struct semaphore *)p;
   (void)which;
-  
+
   female_start();
-	// Implement this function 
+	// Implement this function
+   lock_acquire(whaleLock);
+  // Implement this function
+  if (wchan_isempty(maleCv->cv_wchan) || wchan_isempty(matchMakerCv->cv_wchan))
+  {
+      cv_wait(femaleCv,whaleLock);
+  }else{
+       cv_signal(maleCv,whaleLock);
+       cv_signal(matchMakerCv,whaleLock);
+  }
+  lock_release(whaleLock);
   female_end();
-  
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // whalemating driver can return to the menu cleanly.
   V(whalematingMenuSemaphore);
   return;
 }
 
+
+
+
+
 void
 matchmaker(void *p, unsigned long which)
 {
 	struct semaphore * whalematingMenuSemaphore = (struct semaphore *)p;
   (void)which;
-  
+
   matchmaker_start();
-	// Implement this function 
+	// Implement this function
+   lock_acquire(whaleLock);
+  // Implement this function
+  if (wchan_isempty(femaleCv->cv_wchan) || wchan_isempty(maleCv->cv_wchan))
+  {
+      cv_wait(matchMakerCv,whaleLock);
+  }else{
+       cv_signal(femaleCv,whaleLock);
+       cv_signal(maleCv,whaleLock);
+  }
+  lock_release(whaleLock);
   matchmaker_end();
-  
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // whalemating driver can return to the menu cleanly.
   V(whalematingMenuSemaphore);
@@ -117,7 +165,7 @@ matchmaker(void *p, unsigned long which)
  * 3       1
  *    3 2
  * --     --
- *   | 2 | 
+ *   | 2 |
  *
  * As way to think about it, assuming cars drive on the right: a car entering
  * the intersection from direction X will enter intersection quadrant X
@@ -153,7 +201,7 @@ gostraight(void *p, unsigned long direction)
 {
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
   (void)direction;
-  
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);
@@ -165,7 +213,7 @@ turnleft(void *p, unsigned long direction)
 {
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
   (void)direction;
-  
+
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);
