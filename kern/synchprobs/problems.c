@@ -178,12 +178,21 @@ matchmaker(void *p, unsigned long which)
  * Your solutions below should call the inQuadrant() and leaveIntersection()
  * functions in drivers.c.
  */
+typedef enum{
+  SL_LEFT,
+  SL_RIGHT,
+  SL_STRAIGHT
+} SL_DIRECTION;
 
  static struct lock *zero;
  static struct lock *one;
  static struct lock *two;
  static struct lock *three;
-
+ static struct lock *big_lock;
+ void move_to_quadrants(SL_DIRECTION turn, unsigned long direction);
+ void release_quadrants(SL_DIRECTION turn, unsigned long direction);
+ void lock_quadrants(SL_DIRECTION turn, unsigned long direction);
+ struct lock *get_lock_from_number(int number);
 // 13 Feb 2012 : GWA : Adding at the suggestion of Isaac Elbaz. These
 // functions will allow you to do local initialization. They are called at
 // the top of the corresponding driver code.
@@ -193,6 +202,7 @@ void stoplight_init() {
   one = lock_create("one");
   two = lock_create("two");
   three = lock_create("three");
+  big_lock = lock_create("big");
   return;
 }
 
@@ -204,6 +214,7 @@ void stoplight_cleanup() {
   lock_destroy(one);
   lock_destroy(two);
   lock_destroy(three);
+  lock_destroy(big_lock);
   return;
 }
 
@@ -213,8 +224,12 @@ gostraight(void *p, unsigned long direction)
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
   (void)direction;
 
-
-
+  lock_acquire(big_lock);
+  lock_quadrants(SL_STRAIGHT,direction);
+  lock_release(big_lock);
+  move_to_quadrants(SL_STRAIGHT,direction);
+  leaveIntersection();
+  release_quadrants(SL_STRAIGHT,direction);
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);
@@ -227,6 +242,13 @@ turnleft(void *p, unsigned long direction)
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
   (void)direction;
 
+
+  lock_acquire(big_lock);
+  lock_quadrants(SL_LEFT,direction);
+  lock_release(big_lock);
+  move_to_quadrants(SL_LEFT,direction);
+  leaveIntersection();
+  release_quadrants(SL_LEFT,direction);
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);
@@ -239,11 +261,110 @@ turnright(void *p, unsigned long direction)
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
   (void)direction;
 
+
+  lock_acquire(big_lock);
+  lock_quadrants(SL_RIGHT,direction);
+  lock_release(big_lock);
+  move_to_quadrants(SL_RIGHT,direction);
+  leaveIntersection();
+  release_quadrants(SL_RIGHT,direction);
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // stoplight driver can return to the menu cleanly.
   V(stoplightMenuSemaphore);
   return;
 }
 
-// void
-// lock_quadrants
+void
+lock_quadrants(SL_DIRECTION turn, unsigned long direction){
+  switch (turn) {
+    case SL_LEFT:{
+       struct lock * first,*second,*third;
+       first = get_lock_from_number(direction);
+       second = get_lock_from_number((direction+3)%4);
+       third = get_lock_from_number((direction + 2)%4);
+       lock_acquire(first);
+       lock_acquire(second);
+       lock_acquire(third);
+       break;
+    }
+    case SL_RIGHT:{
+      struct lock *me = get_lock_from_number(direction);
+      lock_acquire(me);
+      break;
+    }
+    case SL_STRAIGHT:{
+      struct lock *first,*second;
+      first = get_lock_from_number(direction);
+      second = get_lock_from_number((direction+3)%4);
+      lock_acquire(first);
+      lock_acquire(second);
+      break;
+    }
+    default: break;
+  }
+}
+
+void
+move_to_quadrants(SL_DIRECTION turn, unsigned long direction)
+{
+  switch (turn) {
+    case SL_LEFT:{
+      inQuadrant(direction);
+      inQuadrant((direction+3)%4);
+      inQuadrant((direction + 2)%4);
+      break;
+    }
+    case SL_RIGHT:{
+      inQuadrant(direction);
+      break;
+    }
+    case SL_STRAIGHT:{
+      inQuadrant(direction);
+      inQuadrant((direction+3)%4);
+      break;
+    }
+    default: break;
+  }
+}
+
+void
+release_quadrants(SL_DIRECTION turn, unsigned long direction)
+{
+  switch (turn) {
+    case SL_LEFT:{
+       struct lock * first, *second, *third;
+       first = get_lock_from_number(direction);
+       second = get_lock_from_number((direction+3)%4);
+       third = get_lock_from_number((direction + 2)%4);
+       lock_release(first);
+       lock_release(second);
+       lock_release(third);
+       break;
+    }
+    case SL_RIGHT:{
+      struct lock *me = get_lock_from_number(direction);
+      lock_release(me);
+      break;
+    }
+    case SL_STRAIGHT:{
+      struct lock *first, *second;
+      first = get_lock_from_number(direction);
+      second = get_lock_from_number((direction+3)%4);
+      lock_release(first);
+      lock_release(second);
+      break;
+    }
+    default: break;
+  }
+}
+
+struct lock *get_lock_from_number(int number)
+{
+  switch (number){
+    case 0: return zero;
+    case 1: return one;
+    case 2: return two;
+    case 3: return three;
+    default: return NULL;
+  }
+}

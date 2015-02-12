@@ -207,6 +207,7 @@ lock_acquire(struct lock *lock)
         }
         lock->lock_holder = curthread;
         spinlock_release(&lock->lock_lk);
+
 }
 
 void
