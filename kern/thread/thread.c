@@ -153,7 +153,11 @@ thread_create(const char *name)
 	thread->t_cwd = NULL;
 
 	/* If you add to struct thread, be sure to initialize here */
-
+	/* FD table */
+	for (int i = 0; i < OPEN_MAX; ++i)
+	{
+		thread->t_fdtable[i] = 0;
+	}
 	return thread;
 }
 
@@ -176,7 +180,7 @@ cpu_create(unsigned hardware_number)
 	if (c == NULL) {
 		panic("cpu_create: Out of memory\n");
 	}
-	
+
 	c->c_self = c;
 	c->c_hardware_number = hardware_number;
 
@@ -419,7 +423,7 @@ thread_start_cpus(void)
 
 	cpu_startup_sem = sem_create("cpu_hatch", 0);
 	mainbus_start_cpus();
-	
+
 	for (i=0; i<cpuarray_num(&allcpus) - 1; i++) {
 		P(cpu_startup_sem);
 	}
@@ -430,7 +434,7 @@ thread_start_cpus(void)
 /*
  * Make a thread runnable.
  *
- * targetcpu might be curcpu; it might not be, too. 
+ * targetcpu might be curcpu; it might not be, too.
  */
 static
 void

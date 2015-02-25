@@ -38,7 +38,7 @@
 
 #include <spinlock.h>
 #include <threadlist.h>
-#include <filesys.h>
+#include <kern/filesys.h>
 #include <limits.h>
 
 struct addrspace;
@@ -114,7 +114,7 @@ struct thread {
 	struct vnode *t_cwd;		/* current working directory */
 
 	/* add more here as needed */
-	/* File table */
+	/* RB: File table */
 	struct fdesc *t_fdtable[OPEN_MAX];
 
 };

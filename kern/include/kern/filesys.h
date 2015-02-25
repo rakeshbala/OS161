@@ -1,7 +1,10 @@
 #ifndef FILESYS_H
 #define FILESYS_H
 
+
 #define MAX_FILENAME_LEN 255
+
+#include <types.h>
 
 struct fdesc
 {
@@ -13,7 +16,6 @@ struct fdesc
 	struct vnode *vn;
 };
 
-
-int sys_open(const char *filename,int flags,int mode);
+void fdesc_destroy(struct fdesc * fd);
 
 #endif

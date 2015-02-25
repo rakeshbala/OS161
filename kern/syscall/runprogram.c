@@ -44,7 +44,7 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
-
+#include <synch.h>
 /*
  * Load program "progname" and start running it in usermode.
  * Does not return except on error.
@@ -95,10 +95,65 @@ runprogram(char *progname)
 		return result;
 	}
 
+	/************ RB:Initialize console - Begin ************/
+	// stdin
+	struct vnode *stdin;
+	char *consolePath = (char *)"con:";
+	result = vfs_open(consolePath, O_RDONLY, 0664, &stdin);
+	if (result)
+	{
+		return result;
+	}
+	struct fdesc * stdin_fd = kmalloc(sizeof(struct fdesc));
+	strcpy(stdin_fd->name,"con:");
+	stdin_fd->flags = O_RDONLY;
+	stdin_fd->offset = 0;
+	stdin_fd->ref_count = 1;
+	stdin_fd->lock = lock_create("con");
+	stdin_fd->vn =stdin;
+
+	// stdout
+	struct vnode *stdout;
+	result = vfs_open(consolePath, O_WRONLY, 0664, &stdout);
+	if (result)
+	{
+		return result;
+	}
+	struct fdesc * stdout_fd = kmalloc(sizeof(struct fdesc));
+	strcpy(stdout_fd->name,"con:");
+	stdout_fd->flags = O_WRONLY;
+	stdout_fd->offset = 0;
+	stdout_fd->ref_count = 1;
+	stdout_fd->lock = lock_create("con");
+	stdout_fd->vn =stdout;
+
+	//stderr
+	struct vnode *stderr;
+	result = vfs_open(consolePath, O_WRONLY, 0664, &stderr);
+	if (result)
+	{
+		return result;
+	}
+	struct fdesc * stderr_fd = kmalloc(sizeof(struct fdesc));
+	strcpy(stderr_fd->name,"con:");
+	stderr_fd->flags = O_WRONLY;
+	stderr_fd->offset = 0;
+	stderr_fd->ref_count = 1;
+	stderr_fd->lock = lock_create("con");
+	stderr_fd->vn =stderr;
+
+	curthread->t_fdtable[0] = stdin_fd;
+	curthread->t_fdtable[1] = stdout_fd;
+	curthread->t_fdtable[2] = stderr_fd;
+
+	/************ RB:End ************/
+
+
+
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
 			  stackptr, entrypoint);
-	
+
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
 	return EINVAL;
