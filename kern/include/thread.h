@@ -1,4 +1,4 @@
-/*
+	/*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
  *
@@ -38,6 +38,8 @@
 
 #include <spinlock.h>
 #include <threadlist.h>
+#include <filesys.h>
+#include <limits.h>
 
 struct addrspace;
 struct cpu;
@@ -112,6 +114,9 @@ struct thread {
 	struct vnode *t_cwd;		/* current working directory */
 
 	/* add more here as needed */
+	/* File table */
+	struct fdesc *t_fdtable[OPEN_MAX];
+
 };
 
 /* Call once during system startup to allocate data structures. */
@@ -135,9 +140,9 @@ void thread_shutdown(void);
  * thread should be done only with caution, because in general the
  * child thread might exit at any time.) Returns an error code.
  */
-int thread_fork(const char *name, 
+int thread_fork(const char *name,
                 void (*func)(void *, unsigned long),
-                void *data1, unsigned long data2, 
+                void *data1, unsigned long data2,
                 struct thread **ret);
 
 /*
