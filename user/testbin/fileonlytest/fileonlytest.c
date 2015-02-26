@@ -55,7 +55,7 @@ main(int argc, char **argv)
 {
 
 	// 23 Mar 2012 : GWA : Assume argument passing is *not* supported.
-	
+
 	(void) argc;
 	(void) argv;
 	int i, j;
@@ -72,49 +72,51 @@ main(int argc, char **argv)
 	if (fh < 0) {
 		err(1, "create failed");
 	}
-	
+
 	printf("Writing %d bytes.\n", BUFFER_SIZE * BUFFER_COUNT);
 
   // 23 Mar 2012 : GWA : Do the even-numbered writes. Test read() and
   // lseek(SEEK_END).
-  
+
   for (i = 0; i < BUFFER_COUNT / 2; i++) {
 		for (j = 0; j < BUFFER_SIZE; j++) {
 			writebuf[j] = i * 2 * j;
 		}
 		len = write(fh, writebuf, sizeof(writebuf));
+		printf("%d\n", len);
+		printf("%d\n", sizeof(writebuf));
 		if (len != sizeof(writebuf)) {
 			err(1, "write failed");
 		}
 
     // 23 Mar 2012 : GWA : Use lseek() to skip the odd guys.
-	
+
     target = (i + 1) * 2 * sizeof(writebuf);
     pos = lseek(fh, sizeof(writebuf), SEEK_END);
     if (pos != target) {
       err(1, "(even) lseek failed: %llu != %llu", pos, target);
     }
   }
-	
+
   target = 0;
   pos = lseek(fh, target, SEEK_SET);
   if (pos != target) {
     err(1, "(reset) lseek failed: %llu != %llu", pos, target);
   }
-    
+
   // 23 Mar 2012 : GWA : Do the odd-numbered writes. Test write() and
   // lseek(SEEK_CUR).
-  
+
   for (i = 0; i < BUFFER_COUNT / 2; i++) {
-    
+
     // 23 Mar 2012 : GWA : Use lseek() to skip the even guys.
-    
+
     target = ((i * 2) + 1) * sizeof(writebuf);
     pos = lseek(fh, sizeof(writebuf), SEEK_CUR);
     if (pos != target) {
       err(1, "(odd) lseek failed: %llu != %llu", pos, target);
     }
-    
+
     for (j = 0; j < BUFFER_SIZE; j++) {
 			writebuf[j] = ((i * 2) + 1) * j;
 		}
@@ -123,10 +125,10 @@ main(int argc, char **argv)
 			err(1, "write failed");
 		}
   }
-  
+
 	// 23 Mar 2012 : GWA : Read the test data back and make sure what we wrote
 	// ended up where we wrote it. Tests read() and lseek(SEEK_SET).
-	
+
 	printf("Verifying write.\n");
 
 	for (i = BUFFER_COUNT - 1; i >= 0; i--) {
@@ -147,19 +149,19 @@ main(int argc, char **argv)
 	}
 
 	// 23 Mar 2012 : GWA : Close the file.
-	
+
 	printf("Closing %s\n", filename);
 	close(fh);
-	
+
 	// 23 Mar 2012 : GWA : Make sure the file is actually closed.
 
 	pos = lseek(fh, (off_t) 0, SEEK_SET);
 	if (pos == 0) {
 		err(1, "seek after close succeeded");
 	}
-		
+
 	// 23 Mar 2012 : GWA : FIXME : Spin until exit() works.
-	
+
 	printf("Spinning in case exit() doesn't work.\n");
 	while (1) {};
 

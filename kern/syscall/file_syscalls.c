@@ -16,7 +16,7 @@
 #include <uio.h>
 
 int
-sys_open(char * filename, int flags, int mode, int *fd)
+sys_open(userptr_t filename, int flags, int mode, int *fd)
 {
 
 	if (filename == NULL)
@@ -27,12 +27,19 @@ sys_open(char * filename, int flags, int mode, int *fd)
 		/************ RB:Remove all 'OR'able flags ************/
 		open_flags = open_flags & 3;
 		/************ RB:Validate for multiple flags ************/
-		if (open_flags == 3)
+		if (open_flags & O_RDONLY && open_flags & O_WRONLY)
 		{
 			return EINVAL;
-		}else{
+		}else if(open_flags & O_RDONLY && open_flags & O_RDWR)
+		{
+			return EINVAL;
+		}else if(open_flags & O_WRONLY && open_flags & O_RDWR)
+		{
+			return EINVAL;
+		}else
+		{
 			struct vnode * f_vnode;
-			int err = vfs_open(filename, flags, mode, &f_vnode);
+			int err = vfs_open((char *)filename, flags, mode, &f_vnode);
 			if (err){
 				return err;
 			}else{
@@ -45,33 +52,35 @@ sys_open(char * filename, int flags, int mode, int *fd)
 					int err = VOP_STAT(f_vnode, &f_stat);
 					if (err)
 					{
+						return err;
 					}
 					offset = f_stat.st_size;
-					int i;
-					for (i=3; i<OPEN_MAX; i++){
-						if (curthread->t_fdtable[i] == 0)
-						{
-							break;
-						}
-					}
-					if (i>=OPEN_MAX)
-					{
-						return EMFILE;
-					}else{
 
-						struct fdesc *file_fd = kmalloc(sizeof(struct fdesc));
-						strcpy(file_fd->name,filename);
+				}
+				int i;
+				for (i=3; i<OPEN_MAX; i++){
+					if (curthread->t_fdtable[i] == 0)
+					{
+						break;
+					}
+				}
+				if (i>=OPEN_MAX)
+				{
+					return EMFILE;
+				}else{
+
+					struct fdesc *file_fd = kmalloc(sizeof(struct fdesc));
+					strcpy(file_fd->name,(char *)filename);
 
 						/************ RB:Change this lock name later - Not nice ************/
-						file_fd->lock = lock_create(file_fd->name);
-						file_fd->offset = offset;
-						file_fd->ref_count = 0;
-						file_fd->vn = f_vnode;
-						curthread->t_fdtable[i] = file_fd;
-						*fd = i;
-						return 0;
-					}
-
+					file_fd->lock = lock_create(file_fd->name);
+					file_fd->offset = offset;
+					file_fd->ref_count = 0;
+					file_fd->vn = f_vnode;
+					file_fd->flags = flags;
+					curthread->t_fdtable[i] = file_fd;
+					*fd = i;
+					return 0;
 				}
 
 			}
@@ -84,7 +93,7 @@ sys_open(char * filename, int flags, int mode, int *fd)
 }
 
 int
-sys_read(int fd, char * buf, size_t nbytes, size_t *bytes_read)
+sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 {
 	struct iovec iov;
 	struct uio u;
@@ -100,12 +109,11 @@ sys_read(int fd, char * buf, size_t nbytes, size_t *bytes_read)
 		return EBADF;
 	}
 
-	if ((t_fd->flags & 3) % 2 == 0)
-	{
+	if (!(t_fd->flags & O_RDONLY || t_fd->flags & O_RDWR)){
 		return EBADF;
 	}
 
-	iov.iov_ubase = (userptr_t)buf;
+	iov.iov_ubase = buf;
 	iov.iov_len = nbytes;		 // length of the memory space
 	u.uio_iov = &iov;
 	u.uio_iovcnt = 1;
@@ -130,7 +138,7 @@ sys_read(int fd, char * buf, size_t nbytes, size_t *bytes_read)
 }
 
 int
-sys_write(int fd, char * buf, size_t nbytes, size_t *bytes_written)
+sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 {
 	struct iovec iov;
 	struct uio u;
@@ -146,10 +154,10 @@ sys_write(int fd, char * buf, size_t nbytes, size_t *bytes_written)
 		return EBADF;
 	}
 
-	if ((t_fd->flags & 3) % 2 != 0)
-	{
+	if (!(t_fd->flags & O_WRONLY || t_fd->flags & O_RDWR)) {
 		return EBADF;
 	}
+
 
 	iov.iov_ubase = (userptr_t)buf;
 	iov.iov_len = nbytes;		 // length of the memory space
@@ -163,12 +171,12 @@ sys_write(int fd, char * buf, size_t nbytes, size_t *bytes_written)
 
 
 
-	int result = VOP_READ(t_fd->vn, &u);
+	int result = VOP_WRITE(t_fd->vn, &u);
 	if (result) {
 		return result;
 	}
 
-	*bytes_written = nbytes-u.uio_resid;
+	*bytes_written = nbytes-u.uio_resid-1;
 	t_fd->offset += (*bytes_written);
 
 	return 0;

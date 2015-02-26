@@ -113,58 +113,26 @@ syscall(struct trapframe *tf)
 	    /* Add stuff here */
 		case SYS_open:
 		{
-			char kfilePath[MAX_FILENAME_LEN];
-			size_t actual;
-			err = copyinstr((const_userptr_t)tf->tf_a0,
-				kfilePath,
-				MAX_FILENAME_LEN,
-				&actual);
-			if (err == 0)
-		    {
-		        err = sys_open(kfilePath,
-								tf->tf_a1,
-								tf->tf_a2, &retval);
-		    }
-		    break;
+			err = sys_open((userptr_t)tf->tf_a0, tf->tf_a1, tf->tf_a2, &retval);
+			break;
 		}
-		// int sys_read(int fd, char * buf, size_t nbytes, size_t *bytes_read);
-		// int sys_write(int fd, char * buf, size_t nbytes, size_t *bytes_written);
-
 		case SYS_write:
 		{
 
-			size_t buf_len =  tf->tf_a2;
-			char kbuf[buf_len];
-			size_t actual;
-			err = copyinstr((const_userptr_t)tf->tf_a1, kbuf, buf_len, &actual);
-			if (err == 0)
-		    {
-		    	size_t bytes_written;
-		        err = sys_write(tf->tf_a0, kbuf, buf_len, &bytes_written);
-		        retval = (int32_t)bytes_written;
-		    }
-
+			size_t buf_len =  tf->tf_a2+1;
+			size_t bytes_written;
+			err = sys_write(tf->tf_a0,(userptr_t)tf->tf_a1, buf_len, &bytes_written);
+			retval = (int32_t)bytes_written;
 			break;
-
 		}
 		case SYS_read:
 		{
-			size_t buf_len =  tf->tf_a2;
-			char kbuf[buf_len];
-			size_t actual;
-			err = copyinstr((const_userptr_t)tf->tf_a1, kbuf, buf_len, &actual);
-			if (err == 0)
-		    {
-		    	size_t bytes_read;
-		        err = sys_write(tf->tf_a0, kbuf, buf_len, &bytes_read);
-		        retval = (int32_t)bytes_read;
-		    }
-
+			size_t buf_len =  tf->tf_a2+1;
+			size_t bytes_read;
+			err = sys_read(tf->tf_a0,(userptr_t)tf->tf_a1, buf_len, &bytes_read);
+			retval = (int32_t)bytes_read;
 			break;
 		}
-		// case SYS_exit:
-		// 	_exit();
-		// break;
 
 	    default:
 		kprintf("Unknown syscall %d\n", callno);

@@ -58,9 +58,9 @@ void enter_new_process(int argc, userptr_t argv, vaddr_t stackptr,
 
 int sys_reboot(int code);
 int sys___time(userptr_t user_seconds, userptr_t user_nanoseconds);
-int sys_open(char * filename, int flags,int mode, int *fd);
-int sys_read(int fd, char * buf, size_t nbytes, size_t *bytes_read);
-int sys_write(int fd, char * buf, size_t nbytes, size_t *bytes_written);
+int sys_open(userptr_t filename, int flags,int mode, int *fd);
+int sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read);
+int sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written);
 int sys_close(int fd);
 
 #endif /* _SYSCALL_H_ */
