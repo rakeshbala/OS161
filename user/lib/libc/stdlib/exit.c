@@ -42,14 +42,26 @@ exit(int code)
 	 * with atexit() before calling the syscall to actually exit.
 	 */
 
+	// __asm volatile("jal _exit;"  /* call _exit */
+ //             "move $4, %0"   /* put code in a0 (delay slot) */
+ //             :     /* no outputs */
+ //             : "r" (code));  /* code is an input */
+
+	//  __asm volatile("li $2, 0xeeeee00f;"  /* load magic addr into v0 */
+ //             "lw $2, 0($2)"      /* fetch from it */
+ //             :: );
+
 	_exit(code);
+	/************ RB:Remove later ************/
+	  // while (1) { }
+
 }
 
 /*
  * The mips gcc we were using in 2001, and probably other versions as
  * well, knows more than is healthy: it knows without being told that
  * exit and _exit don't return.
- * 
+ *
  * This causes it to make foolish optimizations that cause broken
  * things to happen if _exit *does* return, as it does in the base
  * system (because it's unimplemented) and may also do if someone has

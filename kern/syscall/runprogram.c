@@ -98,7 +98,8 @@ runprogram(char *progname)
 	/************ RB:Initialize console - Begin ************/
 	// stdin
 	struct vnode *stdin;
-	char *consolePath = (char *)"con:";
+	char consolePath[5];
+	strcpy(consolePath,"con:");
 	result = vfs_open(consolePath, O_RDONLY, 0664, &stdin);
 	if (result)
 	{
@@ -114,6 +115,7 @@ runprogram(char *progname)
 
 	// stdout
 	struct vnode *stdout;
+	strcpy(consolePath,"con:");
 	result = vfs_open(consolePath, O_WRONLY, 0664, &stdout);
 	if (result)
 	{
@@ -129,6 +131,7 @@ runprogram(char *progname)
 
 	//stderr
 	struct vnode *stderr;
+	strcpy(consolePath,"con:");
 	result = vfs_open(consolePath, O_WRONLY, 0664, &stderr);
 	if (result)
 	{
