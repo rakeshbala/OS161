@@ -24,8 +24,6 @@ sys_open(userptr_t filename, int flags, int mode, int *fd)
 		return EFAULT;
 	}else{
 		int open_flags = flags;
-		/************ RB:Remove all 'OR'able flags ************/
-		open_flags = open_flags & 3;
 		/************ RB:Validate for multiple flags ************/
 		if (open_flags & O_RDONLY && open_flags & O_WRONLY)
 		{
@@ -75,7 +73,7 @@ sys_open(userptr_t filename, int flags, int mode, int *fd)
 						/************ RB:Change this lock name later - Not nice ************/
 					file_fd->lock = lock_create(file_fd->name);
 					file_fd->offset = offset;
-					file_fd->ref_count = 0;
+					file_fd->ref_count = 1;
 					file_fd->vn = f_vnode;
 					file_fd->flags = flags;
 					curthread->t_fdtable[i] = file_fd;
@@ -130,7 +128,7 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 		return result;
 	}
 
-	*bytes_read = nbytes-u.uio_resid;
+	*bytes_read = nbytes-u.uio_resid-1;
 	t_fd->offset += (*bytes_read);
 
 	return 0;
