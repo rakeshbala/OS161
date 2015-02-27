@@ -250,6 +250,15 @@ thread_destroy(struct thread *thread)
 	 * either here or in thread_exit(). (And not both...)
 	 */
 
+	 /************ RB:Free the file table ************/
+	 for (int i = 0; i < OPEN_MAX; ++i)
+	 {
+	 	if (thread->t_fdtable[i] != NULL)
+	 	{
+	 		kfree(thread->t_fdtable[i]);
+	 	}
+	 }
+
 	/* VFS fields, cleaned up in thread_exit */
 	KASSERT(thread->t_cwd == NULL);
 
