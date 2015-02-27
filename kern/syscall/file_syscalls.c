@@ -190,4 +190,3 @@ void fdesc_destroy (struct fdesc *file_fd )
 	lock_destroy(file_fd->lock);
 	kfree(file_fd);
 }
-
