@@ -180,7 +180,53 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 	return 0;
 }
 
+int sys_close(int fd)
+{
 
+	struct fdesc *t_fdesc = curthread->t_fdtable[fd];
+	if(t_fdesc == NULL) {
+		return EBADF;
+	}
+	t_fdesc->ref_count--;
+	if(t_fdesc->ref_count == 0) {
+		return vfs_close(t_fdesc->vn);
+	}
+
+	return 0;
+}
+
+int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
+{
+	struct fdesc *t_fdesc = curthread->t_fdtable[fd];
+	if(t_fdesc == NULL) {
+		return EBADF;
+	}
+	if(fd >=0 && fd < 3) {
+		return ESPIPE;
+	}
+	off_t offset = 0;
+	int err = 0;
+	if(whence == SEEK_SET) {
+		offset = pos;
+	} else if (whence == SEEK_CUR) {
+		offset += pos;
+	} else if (whence == SEEK_END) {
+		struct stat f_stat;
+		err = VOP_STAT(t_fdesc->vn, &f_stat);
+		if (err) {
+			return err;
+		}
+		offset = f_stat.stat;
+	} else {
+		return EINVAL;
+	}
+	err = VOP_TRYSEEK(t_fdesc->vn, offset);
+	if (err) {
+		return err;
+	}
+	t_fdesc->offset = offset;
+	return 0;
+}
 
 void fdesc_destroy (struct fdesc *file_fd )
 {

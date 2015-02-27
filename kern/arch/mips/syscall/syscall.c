@@ -133,6 +133,28 @@ syscall(struct trapframe *tf)
 			retval = (int32_t)bytes_read;
 			break;
 		}
+		case SYS_close:
+		{
+			err = sys_close(tf->tf_a0);
+			break;
+		}
+		case SYS_lseek:
+		{
+			off_t offset = ((off_t)tf->tf_a2 << 32 | tf->tf_a3);
+			int whence;
+			int err = copyin((const userptr_t)(sp+16), &whence, sizeof(whence));
+			if (err == 0)
+			{
+				off_t new_pos;
+				err = sys_lseek(tf->tf_a0, offset, whence, &new_pos);
+				if (err == 0)
+				{
+					retval = (int32_t)((new_pos & 0xFFFFFFFF00000000) >> 32);
+					tf->tf_v1 = (int32_t)(new_pos & 0xFFFFFFFF);
+				}
+			} 
+			break;
+		}
 
 	    default:
 		kprintf("Unknown syscall %d\n", callno);
