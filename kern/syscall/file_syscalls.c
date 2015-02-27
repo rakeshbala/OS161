@@ -11,6 +11,7 @@
 #include <vfs.h>
 #include <kern/fcntl.h>
 #include <kern/stat.h>
+#include <kern/seek.h>
 #include <vnode.h>
 #include <synch.h>
 #include <uio.h>
@@ -189,9 +190,8 @@ int sys_close(int fd)
 	}
 	t_fdesc->ref_count--;
 	if(t_fdesc->ref_count == 0) {
-		return vfs_close(t_fdesc->vn);
+		vfs_close(t_fdesc->vn);
 	}
-
 	return 0;
 }
 
@@ -216,7 +216,7 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 		if (err) {
 			return err;
 		}
-		offset = f_stat.stat;
+		offset = f_stat.st_size;
 	} else {
 		return EINVAL;
 	}
@@ -225,6 +225,7 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 		return err;
 	}
 	t_fdesc->offset = offset;
+	*new_pos = offset;
 	return 0;
 }
 
