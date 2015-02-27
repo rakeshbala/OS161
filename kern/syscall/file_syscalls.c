@@ -110,6 +110,7 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 
 	lock_acquire(t_fd->lock);
 		if (!(t_fd->flags & O_RDONLY || t_fd->flags & O_RDWR)){
+			lock_release(t_fd->lock);
 			return EBADF;
 		}
 
@@ -126,6 +127,7 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 
 		int result = VOP_READ(t_fd->vn, &u);
 		if (result) {
+			lock_release(t_fd->lock);
 			return result;
 		}
 
@@ -155,6 +157,7 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 
 	lock_acquire(t_fd->lock);
 		if (!(t_fd->flags & O_WRONLY || t_fd->flags & O_RDWR)) {
+			lock_release(t_fd->lock);
 			return EBADF;
 		}
 		iov.iov_ubase = (userptr_t)buf;
@@ -168,6 +171,7 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 		u.uio_space = curthread->t_addrspace;
 		int result = VOP_WRITE(t_fd->vn, &u);
 		if (result) {
+			lock_release(t_fd->lock);
 			return result;
 		}
 		*bytes_written = nbytes-u.uio_resid;
@@ -205,28 +209,31 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 		return ESPIPE;
 	}
 	lock_acquire(t_fdesc->lock);
-	off_t offset = 0;
-	int err = 0;
-	if(whence == SEEK_SET) {
-		offset = pos;
-	} else if (whence == SEEK_CUR) {
-		offset = t_fdesc->offset + pos;
-	} else if (whence == SEEK_END) {
-		struct stat f_stat;
-		err = VOP_STAT(t_fdesc->vn, &f_stat);
+		off_t offset = 0;
+		int err = 0;
+		if(whence == SEEK_SET) {
+			offset = pos;
+		} else if (whence == SEEK_CUR) {
+			offset = t_fdesc->offset + pos;
+		} else if (whence == SEEK_END) {
+			struct stat f_stat;
+			err = VOP_STAT(t_fdesc->vn, &f_stat);
+			if (err) {
+				lock_release(t_fdesc->lock);
+				return err;
+			}
+			offset = f_stat.st_size + pos;
+		} else {
+			lock_release(t_fdesc->lock);
+			return EINVAL;
+		}
+		err = VOP_TRYSEEK(t_fdesc->vn, offset);
 		if (err) {
+			lock_release(t_fdesc->lock);
 			return err;
 		}
-		offset = f_stat.st_size + pos;
-	} else {
-		return EINVAL;
-	}
-	err = VOP_TRYSEEK(t_fdesc->vn, offset);
-	if (err) {
-		return err;
-	}
-	t_fdesc->offset = offset;
-	*new_pos = t_fdesc->offset;
+		t_fdesc->offset = offset;
+		*new_pos = t_fdesc->offset;
 	lock_release(t_fdesc->lock);
 	return 0;
 }
