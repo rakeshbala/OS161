@@ -134,7 +134,6 @@ main(int argc, char **argv)
 
 	for (i = BUFFER_COUNT - 1; i >= 0; i--) {
 		target = i * sizeof(writebuf);
-		printf("target :%ld\n", (long)target);
 
 		pos = lseek(fh, target, SEEK_SET);
 		if (pos != target) {

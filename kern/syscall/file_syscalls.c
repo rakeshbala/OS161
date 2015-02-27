@@ -108,30 +108,30 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 		return EBADF;
 	}
 
-	if (!(t_fd->flags & O_RDONLY || t_fd->flags & O_RDWR)){
-		return EBADF;
-	}
+	lock_acquire(t_fd->lock);
+		if (!(t_fd->flags & O_RDONLY || t_fd->flags & O_RDWR)){
+			return EBADF;
+		}
 
-	iov.iov_ubase = buf;
-	iov.iov_len = nbytes;		 // length of the memory space
-	u.uio_iov = &iov;
-	u.uio_iovcnt = 1;
-	u.uio_resid = nbytes;          // amount to read from the file
-	u.uio_offset = t_fd->offset;
-	u.uio_segflg = UIO_USERSPACE;
-	u.uio_rw = UIO_READ;
-	u.uio_space = curthread->t_addrspace;
+		iov.iov_ubase = buf;
+		iov.iov_len = nbytes;		 // length of the memory space
+		u.uio_iov = &iov;
+		u.uio_iovcnt = 1;
+		u.uio_resid = nbytes;          // amount to read from the file
+		u.uio_offset = t_fd->offset;
+		u.uio_segflg = UIO_USERSPACE;
+		u.uio_rw = UIO_READ;
+		u.uio_space = curthread->t_addrspace;
 
 
+		int result = VOP_READ(t_fd->vn, &u);
+		if (result) {
+			return result;
+		}
 
-	int result = VOP_READ(t_fd->vn, &u);
-	if (result) {
-		return result;
-	}
-
-	*bytes_read = nbytes-u.uio_resid;
-	t_fd->offset += (*bytes_read);
-
+		*bytes_read = nbytes-u.uio_resid;
+		t_fd->offset += (*bytes_read);
+	lock_release(t_fd->lock);
 	return 0;
 
 }
@@ -153,31 +153,26 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 		return EBADF;
 	}
 
-	if (!(t_fd->flags & O_WRONLY || t_fd->flags & O_RDWR)) {
-		return EBADF;
-	}
-
-
-	iov.iov_ubase = (userptr_t)buf;
-	iov.iov_len = nbytes;		 // length of the memory space
-	u.uio_iov = &iov;
-	u.uio_iovcnt = 1;
-	u.uio_resid = nbytes;          // amount to write to file
-	u.uio_offset = t_fd->offset;
-	u.uio_segflg = UIO_USERSPACE;
-	u.uio_rw = UIO_WRITE;
-	u.uio_space = curthread->t_addrspace;
-
-
-
-	int result = VOP_WRITE(t_fd->vn, &u);
-	if (result) {
-		return result;
-	}
-
-	*bytes_written = nbytes-u.uio_resid;
-	t_fd->offset += (*bytes_written);
-
+	lock_acquire(t_fd->lock);
+		if (!(t_fd->flags & O_WRONLY || t_fd->flags & O_RDWR)) {
+			return EBADF;
+		}
+		iov.iov_ubase = (userptr_t)buf;
+		iov.iov_len = nbytes;		 // length of the memory space
+		u.uio_iov = &iov;
+		u.uio_iovcnt = 1;
+		u.uio_resid = nbytes;          // amount to write to file
+		u.uio_offset = t_fd->offset;
+		u.uio_segflg = UIO_USERSPACE;
+		u.uio_rw = UIO_WRITE;
+		u.uio_space = curthread->t_addrspace;
+		int result = VOP_WRITE(t_fd->vn, &u);
+		if (result) {
+			return result;
+		}
+		*bytes_written = nbytes-u.uio_resid;
+		t_fd->offset += (*bytes_written);
+	lock_release(t_fd->lock);
 	return 0;
 }
 
@@ -188,11 +183,14 @@ int sys_close(int fd)
 	if(t_fdesc == NULL) {
 		return EBADF;
 	}
+	lock_acquire(t_fdesc->lock);
 	t_fdesc->ref_count--;
 	curthread->t_fdtable[fd] = NULL;
 	if(t_fdesc->ref_count == 0) {
 		vfs_close(t_fdesc->vn);
-		kfree(t_fdesc);
+		fdesc_destroy(t_fdesc);
+	}else{
+		lock_release(t_fdesc->lock);
 	}
 	return 0;
 }
@@ -206,6 +204,7 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 	if(fd >=0 && fd < 3) {
 		return ESPIPE;
 	}
+	lock_acquire(t_fdesc->lock);
 	off_t offset = 0;
 	int err = 0;
 	if(whence == SEEK_SET) {
@@ -228,12 +227,12 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 	}
 	t_fdesc->offset = offset;
 	*new_pos = t_fdesc->offset;
+	lock_release(t_fdesc->lock);
 	return 0;
 }
 
 void fdesc_destroy (struct fdesc *file_fd )
 {
-
 	lock_destroy(file_fd->lock);
 	kfree(file_fd);
 }
