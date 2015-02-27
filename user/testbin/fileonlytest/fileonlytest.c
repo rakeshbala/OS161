@@ -83,16 +83,17 @@ main(int argc, char **argv)
 			writebuf[j] = i * 2 * j;
 		}
 		len = write(fh, writebuf, sizeof(writebuf));
-		printf("%d\n", len);
-		printf("%d\n", sizeof(writebuf));
 		if (len != sizeof(writebuf)) {
 			err(1, "write failed");
 		}
 
     // 23 Mar 2012 : GWA : Use lseek() to skip the odd guys.
-
+	// printf("Lseek start\n");
     target = (i + 1) * 2 * sizeof(writebuf);
     pos = lseek(fh, sizeof(writebuf), SEEK_END);
+    // printf("%ld\n", (long)target);
+    // printf("%ld\n", (long)pos);
+
     if (pos != target) {
       err(1, "(even) lseek failed: %llu != %llu", pos, target);
     }
@@ -132,11 +133,13 @@ main(int argc, char **argv)
 	printf("Verifying write.\n");
 
 	for (i = BUFFER_COUNT - 1; i >= 0; i--) {
-    target = i * sizeof(writebuf);
+		target = i * sizeof(writebuf);
+		printf("target :%ld\n", (long)target);
+
 		pos = lseek(fh, target, SEEK_SET);
-    if (pos != target) {
-      err(1, "(verify) lseek failed: %llu != %llu", pos, target);
-    }
+		if (pos != target) {
+			err(1, "(verify) lseek failed: %llu != %llu", pos, target);
+		}
 		len = read(fh, readbuf, sizeof(readbuf));
 		if (len != sizeof(readbuf)) {
 			err(1, "read failed");

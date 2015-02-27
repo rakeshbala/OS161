@@ -129,7 +129,7 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 		return result;
 	}
 
-	*bytes_read = nbytes-u.uio_resid-1;
+	*bytes_read = nbytes-u.uio_resid;
 	t_fd->offset += (*bytes_read);
 
 	return 0;
@@ -162,7 +162,7 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 	iov.iov_len = nbytes;		 // length of the memory space
 	u.uio_iov = &iov;
 	u.uio_iovcnt = 1;
-	u.uio_resid = nbytes;          // amount to read from the file
+	u.uio_resid = nbytes;          // amount to write to file
 	u.uio_offset = t_fd->offset;
 	u.uio_segflg = UIO_USERSPACE;
 	u.uio_rw = UIO_WRITE;
@@ -175,7 +175,7 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 		return result;
 	}
 
-	*bytes_written = nbytes-u.uio_resid-1;
+	*bytes_written = nbytes-u.uio_resid;
 	t_fd->offset += (*bytes_written);
 
 	return 0;
@@ -189,8 +189,10 @@ int sys_close(int fd)
 		return EBADF;
 	}
 	t_fdesc->ref_count--;
+	curthread->t_fdtable[fd] = NULL;
 	if(t_fdesc->ref_count == 0) {
 		vfs_close(t_fdesc->vn);
+		kfree(t_fdesc);
 	}
 	return 0;
 }
@@ -209,14 +211,14 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 	if(whence == SEEK_SET) {
 		offset = pos;
 	} else if (whence == SEEK_CUR) {
-		offset += pos;
+		offset = t_fdesc->offset + pos;
 	} else if (whence == SEEK_END) {
 		struct stat f_stat;
 		err = VOP_STAT(t_fdesc->vn, &f_stat);
 		if (err) {
 			return err;
 		}
-		offset = f_stat.st_size;
+		offset = f_stat.st_size + pos;
 	} else {
 		return EINVAL;
 	}
@@ -225,7 +227,7 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 		return err;
 	}
 	t_fdesc->offset = offset;
-	*new_pos = offset;
+	*new_pos = t_fdesc->offset;
 	return 0;
 }
 
