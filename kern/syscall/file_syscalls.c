@@ -14,6 +14,7 @@
 #include <vnode.h>
 #include <synch.h>
 #include <uio.h>
+#include <unistd.h>
 
 int
 sys_open(userptr_t filename, int flags, int mode, int *fd)
@@ -225,6 +226,18 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 		return err;
 	}
 	t_fdesc->offset = offset;
+	return 0;
+}
+
+int sys_chdir (const char *pathname)
+{
+	if(pathname == NULL) {
+		return EFAULT;
+	}
+	err = vfs_chdir(*pathname);
+	if (err) {
+		return err;
+	}
 	return 0;
 }
 

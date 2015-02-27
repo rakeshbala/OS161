@@ -142,7 +142,7 @@ syscall(struct trapframe *tf)
 		{
 			off_t offset = ((off_t)tf->tf_a2 << 32 | tf->tf_a3);
 			int whence;
-			int err = copyin((const userptr_t)(sp+16), &whence, sizeof(whence));
+			err = copyin((const userptr_t)(sp+16), &whence, sizeof(whence));
 			if (err == 0)
 			{
 				off_t new_pos;
@@ -153,6 +153,11 @@ syscall(struct trapframe *tf)
 					tf->tf_v1 = (int32_t)(new_pos & 0xFFFFFFFF);
 				}
 			} 
+			break;
+		}
+		case SYS_chdir:
+		{
+			err = SYS_chdir((userptr_t)tf->tf_a0);
 			break;
 		}
 
