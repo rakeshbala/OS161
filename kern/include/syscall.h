@@ -63,5 +63,7 @@ int sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read);
 int sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written);
 int sys_close(int fd);
 int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos);
+int sys_chdir(userptr_t pathname);
+int sys___getcwd(userptr_t buf, size_t buflen,size_t *data_len);
 void sys__exit(int exitcode);
 #endif /* _SYSCALL_H_ */

@@ -155,6 +155,19 @@ syscall(struct trapframe *tf)
 			}
 			break;
 		}
+		case SYS_chdir:
+		{
+			err = sys_chdir((userptr_t)tf->tf_a0);
+			break;
+		}
+		case SYS___getcwd:
+		{
+			size_t buf_len =  tf->tf_a1;
+			size_t data_len;
+			err = sys___getcwd((userptr_t)tf->tf_a0, buf_len, &data_len);
+			retval = (int32_t)data_len;
+			break;
+		}
 
 		case SYS__exit:
 		{
