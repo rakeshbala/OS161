@@ -78,6 +78,7 @@ struct lock {
         struct wchan *lock_wchan;
         struct spinlock lock_lk;
         volatile struct thread * lock_holder;
+        int hold_count;
         // add what you need here
 };
 
@@ -118,7 +119,7 @@ struct cv {
         char *cv_name;
         // add what you need here
         // (don't forget to mark things volatile as needed)
-        /***************RR:Adding CV Structure***************/
+        /*************** RR:Adding CV Structure ***************/
         struct wchan *cv_wchan;
 };
 

@@ -41,6 +41,7 @@
 #include <kern/filesys.h>
 #include <limits.h>
 
+
 struct addrspace;
 struct cpu;
 struct vnode;
@@ -117,6 +118,8 @@ struct thread {
 	/* RB: File table */
 	struct fdesc *t_fdtable[OPEN_MAX];
 
+	/************ RB:Pid ************/
+	pid_t t_pid;
 };
 
 /* Call once during system startup to allocate data structures. */

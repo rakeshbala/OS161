@@ -173,6 +173,8 @@ lock_create(const char *name)
         /************ RB:Init spin locks ************/
         spinlock_init(&lock->lock_lk);
 
+        lock->hold_count = 0;
+        lock->lock_holder = NULL;
         return lock;
 }
 
@@ -195,10 +197,18 @@ lock_acquire(struct lock *lock)
         // (void)lock;  // suppress warning until code gets written
         /************ RB:Acquire lock before assigning holder ************/
         KASSERT(lock != NULL);
+
+
         spinlock_acquire(&lock->lock_lk);
         /************ RB:Go to sleep if already acquired ************/
         while(lock->lock_holder != NULL)
         {
+            /************ RB:Make it recursive ************/
+            if (lock_do_i_hold(lock)){
+                lock->hold_count++;
+                spinlock_release(&lock->lock_lk);
+                return;
+            }
             wchan_lock(lock->lock_wchan);
             /************ RB:Relase lock before sleeping ************/
             spinlock_release(&lock->lock_lk);
@@ -206,6 +216,7 @@ lock_acquire(struct lock *lock)
             spinlock_acquire(&lock->lock_lk);
         }
         lock->lock_holder = curthread;
+        lock->hold_count++;
         spinlock_release(&lock->lock_lk);
 
 }
@@ -216,7 +227,19 @@ lock_release(struct lock *lock)
         // Write this
         /************ RB:Lock and NULLify the holder field ************/
         KASSERT(lock != NULL);
+
+
         spinlock_acquire(&lock->lock_lk);
+        if (lock_do_i_hold(lock))
+        {
+            /************ RB:Recursive ************/
+            lock->hold_count--;
+            if (lock->hold_count >0)
+            {
+                spinlock_release(&lock->lock_lk);
+                return;
+            }
+        }
         lock->lock_holder = NULL;
         wchan_wakeone(lock->lock_wchan);
         spinlock_release(&lock->lock_lk);

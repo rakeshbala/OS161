@@ -47,13 +47,20 @@
 #include <addrspace.h>
 #include <mainbus.h>
 #include <vnode.h>
+#include <kern/procsys.h>
 
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"
 
 
+
+
 /* Magic number used as a guard value on kernel thread stacks. */
 #define THREAD_STACK_MAGIC 0xbaadf00d
+
+/************ RB:Global process table ************/
+struct pdesc* g_pdtable[PID_LIMIT];
+
 
 /* Wait channel. */
 struct wchan {
@@ -158,6 +165,47 @@ thread_create(const char *name)
 	{
 		thread->t_fdtable[i] = 0;
 	}
+
+	/************ RB:PID allocation ************/
+	for (int i = 1; i < PID_LIMIT; ++i)
+	{
+		if (g_pdtable[i] == NULL)
+		{
+			struct pdesc * pd = kmalloc(sizeof(struct pdesc *));
+			if (pd == NULL)
+			{
+				kfree(thread->t_name);
+				kfree(thread);
+				return NULL;
+			}
+			pd->wait_cv = cv_create("wait-cv");
+			if (pd->wait_cv == NULL)
+			{
+				kfree(pd);
+				kfree(thread->t_name);
+				kfree(thread);
+				return NULL;
+			}
+			pd->wait_lock = lock_create("wait-lock");
+			if (pd->wait_lock == NULL)
+			{
+				kfree(pd->wait_cv);
+				kfree(pd);
+				kfree(thread->t_name);
+				kfree(thread);
+				return NULL;
+			}
+
+			pd->exited = false;
+			pd->ppid = -1;
+			pd->exitcode = -1;
+			pd->self = thread;
+			g_pdtable[i] = pd;
+			thread->t_pid = i;
+			break;
+		}
+	}
+
 	return thread;
 }
 

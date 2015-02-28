@@ -15,80 +15,85 @@
 #include <vnode.h>
 #include <synch.h>
 #include <uio.h>
+#include <copyinout.h>
 
 int
 sys_open(userptr_t filename, int flags, int mode, int *fd)
 {
 
+	char kbuf[MAX_FILENAME_LEN];
+	size_t actual;
+	int err;
+	if ((err = copyinstr(filename, kbuf, MAX_FILENAME_LEN, &actual)) != 0)
+	{
+		return err;
+	}
+
 	if (filename == NULL)
 	{
 		return EFAULT;
-	}else{
-		int open_flags = flags;
-		/************ RB:Validate for multiple flags ************/
-		if (open_flags & O_RDONLY && open_flags & O_WRONLY)
-		{
-			return EINVAL;
-		}else if(open_flags & O_RDONLY && open_flags & O_RDWR)
-		{
-			return EINVAL;
-		}else if(open_flags & O_WRONLY && open_flags & O_RDWR)
-		{
-			return EINVAL;
-		}else
-		{
-			struct vnode * f_vnode;
-			int err = vfs_open((char *)filename, flags, mode, &f_vnode);
-			if (err){
-				return err;
-			}else{
-				open_flags = flags;
-				off_t offset = 0;
-				/************ RB:If append, set offset at end of file ************/
-				if ((open_flags & O_APPEND) == O_APPEND)
-				{
-					struct stat f_stat;
-					int err = VOP_STAT(f_vnode, &f_stat);
-					if (err)
-					{
-						return err;
-					}
-					offset = f_stat.st_size;
-
-				}
-				int i;
-				for (i=3; i<OPEN_MAX; i++){
-					if (curthread->t_fdtable[i] == 0)
-					{
-						break;
-					}
-				}
-				if (i>=OPEN_MAX)
-				{
-					return EMFILE;
-				}else{
-
-					struct fdesc *file_fd = kmalloc(sizeof(struct fdesc));
-					strcpy(file_fd->name,(char *)filename);
-
-						/************ RB:Change this lock name later - Not nice ************/
-					file_fd->lock = lock_create(file_fd->name);
-					file_fd->offset = offset;
-					file_fd->ref_count = 1;
-					file_fd->vn = f_vnode;
-					file_fd->flags = flags;
-					curthread->t_fdtable[i] = file_fd;
-					*fd = i;
-					return 0;
-				}
-
-			}
-		}
-
 	}
 
-	// vfs_open(filename,)
-	return 1;
+	int open_flags = flags;
+		/************ RB:Validate for multiple flags ************/
+	if (open_flags & O_RDONLY && open_flags & O_WRONLY)
+	{
+		return EINVAL;
+	}else if(open_flags & O_RDONLY && open_flags & O_RDWR)
+	{
+		return EINVAL;
+	}else if(open_flags & O_WRONLY && open_flags & O_RDWR)
+	{
+		return EINVAL;
+	}else
+	{
+		struct vnode * f_vnode;
+		int err = vfs_open((char *)filename, flags, mode, &f_vnode);
+		if (err){
+			return err;
+		}else{
+			open_flags = flags;
+			off_t offset = 0;
+			/************ RB:If append, set offset at end of file ************/
+			if ((open_flags & O_APPEND) == O_APPEND)
+			{
+				struct stat f_stat;
+				int err = VOP_STAT(f_vnode, &f_stat);
+				if (err)
+				{
+					return err;
+				}
+				offset = f_stat.st_size;
+
+			}
+			int i;
+			for (i=3; i<OPEN_MAX; i++){
+				if (curthread->t_fdtable[i] == 0)
+				{
+					break;
+				}
+			}
+			if (i>=OPEN_MAX)
+			{
+				return EMFILE;
+			}else{
+
+				struct fdesc *file_fd = kmalloc(sizeof(struct fdesc));
+				strcpy(file_fd->name,(char *)filename);
+
+					/************ RB:Change this lock name later - Not nice ************/
+				file_fd->lock = lock_create(file_fd->name);
+				file_fd->offset = offset;
+				file_fd->ref_count = 1;
+				file_fd->vn = f_vnode;
+				file_fd->flags = flags;
+				curthread->t_fdtable[i] = file_fd;
+				*fd = i;
+				return 0;
+			}
+
+		}
+	}
 }
 
 int
@@ -96,10 +101,24 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 {
 	struct iovec iov;
 	struct uio u;
+	int err;
 
 	if (buf == NULL)
 	{
 		return EFAULT;
+	}
+
+	void* kbuf = kmalloc(nbytes);
+	if ((err = copyout(kbuf, (userptr_t)buf, nbytes+1)) != 0)
+	{
+		kfree(kbuf);
+		return err;
+	}
+
+
+	if (fd<0 || fd>=OPEN_MAX)
+	{
+		return EBADF;
 	}
 
 	struct fdesc *t_fd = curthread->t_fdtable[fd];
@@ -109,7 +128,8 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 	}
 
 	lock_acquire(t_fd->lock);
-		if (!(t_fd->flags & O_RDONLY || t_fd->flags & O_RDWR)){
+		if (!((t_fd->flags & O_RDONLY) == O_RDONLY
+			|| (t_fd->flags & O_RDWR) == O_RDWR)){
 			lock_release(t_fd->lock);
 			return EBADF;
 		}
@@ -143,12 +163,24 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 {
 	struct iovec iov;
 	struct uio u;
+	int err;
 
 	if (buf == NULL)
 	{
 		return EFAULT;
 	}
 
+	void* kbuf = kmalloc(nbytes);
+    if ((err = copyin(buf, kbuf, nbytes+1)) != 0)
+    {
+        kfree(kbuf);
+        return err;
+    }
+
+    if ( fd<0 || fd >= OPEN_MAX)
+    {
+    	return EBADF;
+    }
 	struct fdesc *t_fd = curthread->t_fdtable[fd];
 	if (t_fd == NULL)
 	{
@@ -156,7 +188,8 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 	}
 
 	lock_acquire(t_fd->lock);
-		if (!(t_fd->flags & O_WRONLY || t_fd->flags & O_RDWR)) {
+		if (!( (t_fd->flags & O_WRONLY) == O_WRONLY
+			|| (t_fd->flags & O_RDWR) == O_RDWR)) {
 			lock_release(t_fd->lock);
 			return EBADF;
 		}
@@ -183,6 +216,10 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 int sys_close(int fd)
 {
 
+	if (fd < 0 || fd >= OPEN_MAX)
+	{
+		return EBADF;
+	}
 	struct fdesc *t_fdesc = curthread->t_fdtable[fd];
 	if(t_fdesc == NULL) {
 		return EBADF;
@@ -201,6 +238,10 @@ int sys_close(int fd)
 
 int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 {
+	if (fd < 0 || fd >= OPEN_MAX)
+	{
+		return EBADF;
+	}
 	struct fdesc *t_fdesc = curthread->t_fdtable[fd];
 	if(t_fdesc == NULL) {
 		return EBADF;

@@ -68,18 +68,18 @@ getinterval(time_t s1, uint32_t ns1, time_t s2, uint32_t ns2,
 
 ////////////////////////////////////////////////////////////
 //
-// Command menu functions 
+// Command menu functions
 
 /*
  * Function for a thread that runs an arbitrary userlevel program by
  * name.
  *
- * Note: this cannot pass arguments to the program. You may wish to 
+ * Note: this cannot pass arguments to the program. You may wish to
  * change it so it can, because that will make testing much easier
  * in the future.
  *
  * It copies the program name because runprogram destroys the copy
- * it gets by passing it to vfs_open(). 
+ * it gets by passing it to vfs_open().
  */
 static
 void
@@ -141,7 +141,6 @@ common_prog(int nargs, char **args)
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		return result;
 	}
-
 	return 0;
 }
 
@@ -340,7 +339,7 @@ cmd_unmount(int nargs, char **args)
 }
 
 /*
- * Command to set the "boot fs". 
+ * Command to set the "boot fs".
  *
  * The boot filesystem is the one that pathnames like /bin/sh with
  * leading slashes refer to.
@@ -376,7 +375,7 @@ cmd_kheapstats(int nargs, char **args)
 	(void)args;
 
 	kheap_printstats();
-	
+
 	return 0;
 }
 
@@ -392,7 +391,7 @@ showmenu(const char *name, const char *x[])
 
 	kprintf("\n");
 	kprintf("%s\n", name);
-	
+
 	for (i=ct=0; x[i]; i++) {
 		ct++;
 	}
@@ -547,7 +546,7 @@ static struct {
 	{ "sy2",	locktest },
 	{ "sy3",	cvtest },
 	{ "sy5",	cvtest2 },
-	
+
 #if OPT_SYNCHPROBS
   /* synchronization problem tests */
   { "sp1", whalemating },
