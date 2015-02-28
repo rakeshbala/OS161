@@ -114,7 +114,6 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 			lock_release(t_fd->lock);
 			return EBADF;
 		}
-
 		iov.iov_ubase = buf;
 		iov.iov_len = nbytes;		 // length of the memory space
 		u.uio_iov = &iov;
@@ -124,14 +123,11 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 		u.uio_segflg = UIO_USERSPACE;
 		u.uio_rw = UIO_READ;
 		u.uio_space = curthread->t_addrspace;
-
-
 		int result = VOP_READ(t_fd->vn, &u);
 		if (result) {
 			lock_release(t_fd->lock);
 			return result;
 		}
-
 		*bytes_read = nbytes-u.uio_resid;
 		t_fd->offset += (*bytes_read);
 	lock_release(t_fd->lock);
@@ -144,18 +140,15 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 {
 	struct iovec iov;
 	struct uio u;
-
 	if (buf == NULL)
 	{
 		return EFAULT;
 	}
-
 	struct fdesc *t_fd = curthread->t_fdtable[fd];
 	if (t_fd == NULL)
 	{
 		return EBADF;
 	}
-
 	lock_acquire(t_fd->lock);
 		if (!(t_fd->flags & O_WRONLY || t_fd->flags & O_RDWR)) {
 			lock_release(t_fd->lock);
@@ -199,7 +192,7 @@ int sys_close(int fd)
 	}
 	return 0;
 }
-
+/*********** RR: 26Feb2015 ***********/
 int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 {
 	struct fdesc *t_fdesc = curthread->t_fdtable[fd];
@@ -238,16 +231,41 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 	lock_release(t_fdesc->lock);
 	return 0;
 }
-
+/*********** RR: 27Feb2015 ***********/
 int sys_chdir (userptr_t pathname)
 {
 	if(pathname == NULL) {
 		return EFAULT;
 	}
-	// int err = vfs_chdir((char *)pathname);
-	// if (err) {
-	// 	return err;
-	// }
+	int err = vfs_chdir((char *)pathname);
+	if (err) {
+		return err;
+	}
+	return 0;
+}
+/*********** RR: 27Feb2015 ***********/
+int sys___getcwd(userptr_t buf, size_t buflen, size_t* data_len)
+{
+	if(buf == NULL) {
+		return EFAULT;
+	}
+
+	struct uio u;
+	struct iovec iov;
+	iov.iov_ubase = buf;
+	iov.iov_len = buflen;		 
+	u.uio_iov = &iov;
+	u.uio_iovcnt = 1;
+	u.uio_resid = buflen;          
+	u.uio_offset = 0;
+	u.uio_segflg = UIO_USERSPACE;
+	u.uio_rw = UIO_READ;
+	u.uio_space = curthread->t_addrspace;
+	int err = vfs_getcwd(&u);
+	if (err) {
+		return err;
+	}
+	*data_len = buflen-u.uio_resid;
 	return 0;
 }
 
