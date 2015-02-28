@@ -90,5 +90,3 @@ sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 
 	return 0;
 }
-
-
