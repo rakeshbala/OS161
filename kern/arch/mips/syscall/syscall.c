@@ -119,7 +119,7 @@ syscall(struct trapframe *tf)
 		case SYS_write:
 		{
 
-			size_t buf_len =  tf->tf_a2+1;
+			size_t buf_len =  tf->tf_a2;
 			size_t bytes_written;
 			err = sys_write(tf->tf_a0,(userptr_t)tf->tf_a1, buf_len, &bytes_written);
 			retval = (int32_t)bytes_written;
@@ -127,7 +127,7 @@ syscall(struct trapframe *tf)
 		}
 		case SYS_read:
 		{
-			size_t buf_len =  tf->tf_a2+1;
+			size_t buf_len =  tf->tf_a2;
 			size_t bytes_read;
 			err = sys_read(tf->tf_a0,(userptr_t)tf->tf_a1, buf_len, &bytes_read);
 			retval = (int32_t)bytes_read;
@@ -140,9 +140,9 @@ syscall(struct trapframe *tf)
 		}
 		case SYS_lseek:
 		{
-			off_t offset = ((off_t)tf->tf_a2 << 32 | tf->tf_a3);
+			off_t offset = (((off_t)tf->tf_a2 << 32) | tf->tf_a3);
 			int whence;
-			err = copyin((const userptr_t)(sp+16), &whence, sizeof(whence));
+			err = copyin((const userptr_t)(tf->tf_sp+16), &whence, sizeof(whence));
 			if (err == 0)
 			{
 				off_t new_pos;
@@ -152,12 +152,12 @@ syscall(struct trapframe *tf)
 					retval = (int32_t)((new_pos & 0xFFFFFFFF00000000) >> 32);
 					tf->tf_v1 = (int32_t)(new_pos & 0xFFFFFFFF);
 				}
-			} 
+			}
 			break;
 		}
 		case SYS_chdir:
 		{
-			err = SYS_chdir((userptr_t)tf->tf_a0);
+			err = sys_chdir((userptr_t)tf->tf_a0);
 			break;
 		}
 
