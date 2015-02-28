@@ -40,6 +40,9 @@
 #include <sfs.h>
 #include <syscall.h>
 #include <test.h>
+#include <synch.h>
+#include <kern/procsys.h>
+
 #include "opt-synchprobs.h"
 #include "opt-sfs.h"
 #include "opt-net.h"
@@ -51,6 +54,10 @@
 #define _PATH_SHELL "/bin/sh"
 
 #define MAXMENUARGS  16
+
+
+struct pdesc* g_pdtable[PID_LIMIT];
+
 
 // XXX this should not be in this file
 void
@@ -133,14 +140,23 @@ common_prog(int nargs, char **args)
 		"synchronization-problems kernel.\n");
 #endif
 
+	/************ RB:Modifying for waiting for child ************/
+	struct thread *child;
 	result = thread_fork(args[0] /* thread name */,
 			cmd_progthread /* thread function */,
 			args /* thread arg */, nargs /* thread arg */,
-			NULL);
+			&child);
 	if (result) {
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		return result;
 	}
+	struct pdesc *pd = g_pdtable[child->t_pid];
+	lock_acquire(pd->wait_lock);
+	while (pd->exited == false)
+	{
+		cv_wait(pd->wait_cv, pd->wait_lock);
+	}
+	lock_release(pd->wait_lock);
 	return 0;
 }
 

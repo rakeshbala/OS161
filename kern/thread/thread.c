@@ -197,7 +197,12 @@ thread_create(const char *name)
 			}
 
 			pd->exited = false;
-			pd->ppid = -1;
+			if (curthread == NULL)
+			{
+				pd->ppid = -1;
+			}else{
+				pd->ppid = curthread->t_pid;
+			}
 			pd->exitcode = -1;
 			pd->self = thread;
 			g_pdtable[i] = pd;

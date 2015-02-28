@@ -66,4 +66,6 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos);
 int sys_chdir(userptr_t pathname);
 int sys___getcwd(userptr_t buf, size_t buflen,size_t *data_len);
 void sys__exit(int exitcode);
+int sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid);
+
 #endif /* _SYSCALL_H_ */
