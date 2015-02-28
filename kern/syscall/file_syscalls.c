@@ -167,16 +167,16 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 	}
 
 	void* kbuf = kmalloc(nbytes);
-    if ((err = copyin(buf, kbuf, nbytes+1)) != 0)
-    {
-        kfree(kbuf);
-        return err;
-    }
+	if ((err = copyin(buf, kbuf, nbytes+1)) != 0)
+	{
+		kfree(kbuf);
+		return err;
+	}
 
-    if ( fd<0 || fd >= OPEN_MAX)
-    {
-    	return EBADF;
-    }
+	if ( fd<0 || fd >= OPEN_MAX)
+	{
+		return EBADF;
+	}
 	struct fdesc *t_fd = curthread->t_fdtable[fd];
 	if (t_fd == NULL)
 	{
@@ -184,7 +184,8 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 	}
 	lock_acquire(t_fd->lock);
 		if (!( (t_fd->flags & O_WRONLY) == O_WRONLY
-			|| (t_fd->flags & O_RDWR) == O_RDWR)) {
+			|| (t_fd->flags & O_RDWR) == O_RDWR))
+		{
 			lock_release(t_fd->lock);
 			return EBADF;
 		}
