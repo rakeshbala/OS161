@@ -174,9 +174,11 @@ syscall(struct trapframe *tf)
 			pid_t ret_pid;
 			err = sys_waitpid(tf->tf_a0, (userptr_t)tf->tf_a1, tf->tf_a2, &ret_pid);
 			retval = (int32_t)ret_pid;
+			break;
 		}
 		case SYS_getpid:{
 			retval = (int32_t)curthread->t_pid;
+			break;
 		}
 		case SYS__exit:
 		{

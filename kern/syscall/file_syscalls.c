@@ -101,19 +101,19 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 {
 	struct iovec iov;
 	struct uio u;
-	int err;
+	// int err;
 
 	if (buf == NULL)
 	{
 		return EFAULT;
 	}
 
-	void* kbuf = kmalloc(nbytes);
-	if ((err = copyout(kbuf, (userptr_t)buf, nbytes+1)) != 0)
-	{
-		kfree(kbuf);
-		return err;
-	}
+	// void* kbuf = kmalloc(nbytes);
+	// if ((err = copyout(kbuf, (userptr_t)buf, nbytes+1)) != 0)
+	// {
+	// 	kfree(kbuf);
+	// 	return err;
+	// }
 
 
 	if (fd<0 || fd>=OPEN_MAX)
@@ -159,19 +159,19 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 {
 	struct iovec iov;
 	struct uio u;
-	int err;
+	// int err;
 
 	if (buf == NULL)
 	{
 		return EFAULT;
 	}
 
-	void* kbuf = kmalloc(nbytes);
-	if ((err = copyin(buf, kbuf, nbytes+1)) != 0)
-	{
-		kfree(kbuf);
-		return err;
-	}
+	// void* kbuf = kmalloc(nbytes);
+	// if ((err = copyin(buf, kbuf, nbytes+1)) != 0)
+	// {
+	// 	kfree(kbuf);
+	// 	return err;
+	// }
 
 	if ( fd<0 || fd >= OPEN_MAX)
 	{
