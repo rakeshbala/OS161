@@ -2,13 +2,13 @@
 #define FILESYS_H
 
 
-#define MAX_FILENAME_LEN 255
 
 #include <types.h>
+#include <limits.h>
 
 struct fdesc
 {
-	char name[MAX_FILENAME_LEN];
+	char name[NAME_MAX];
 	int flags;
 	off_t offset;
 	int ref_count;

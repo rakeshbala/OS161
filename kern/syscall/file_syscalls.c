@@ -21,10 +21,10 @@ int
 sys_open(userptr_t filename, int flags, int mode, int *fd)
 {
 
-	char kbuf[MAX_FILENAME_LEN];
+	char kbuf[NAME_MAX];
 	size_t actual;
 	int err;
-	if ((err = copyinstr(filename, kbuf, MAX_FILENAME_LEN, &actual)) != 0)
+	if ((err = copyinstr(filename, kbuf, NAME_MAX, &actual)) != 0)
 	{
 		return err;
 	}
@@ -280,7 +280,14 @@ int sys_chdir (userptr_t pathname)
 	if(pathname == NULL) {
 		return EFAULT;
 	}
-	int err = vfs_chdir((char *)pathname);
+	char kbuf[PATH_MAX];
+	size_t actual;
+	int err;
+	if ((err = copyinstr(pathname, kbuf, PATH_MAX, &actual)) != 0)
+	{
+		return err;
+	}
+	err = vfs_chdir(kbuf);
 	if (err) {
 		return err;
 	}
