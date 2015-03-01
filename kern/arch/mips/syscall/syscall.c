@@ -188,7 +188,6 @@ syscall(struct trapframe *tf)
 
 		// case SYS_fork:
 		// {
-		// 	pid_t pid;
 		// 	err = sys_fork(tf);
 		// 	break;
 		// }
