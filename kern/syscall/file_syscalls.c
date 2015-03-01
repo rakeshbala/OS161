@@ -313,6 +313,11 @@ int sys_dup2(int oldfd, int newfd, int *ret_fd)
 	if(old_fdesc == NULL) {
 		return EBADF;
 	}
+	if (oldfd == newfd)
+	{
+		*ret_fd = oldfd;
+		return 0;
+	}
 	if (new_fdesc != NULL)
 	{
 		err = sys_close(newfd);
@@ -320,6 +325,7 @@ int sys_dup2(int oldfd, int newfd, int *ret_fd)
 			return err;
 		}
 	}
+	curthread->t_fdtable[oldfd]->ref_count++;
 	curthread->t_fdtable[newfd] = curthread->t_fdtable[oldfd];
 	*ret_fd = oldfd;
 	return 0;
