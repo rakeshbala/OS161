@@ -555,6 +555,13 @@ thread_fork(const char *name,
 		return ENOMEM;
 	}
 
+
+	/************ RB:Copy file table ************/
+	for (int i = 0; i < OPEN_MAX; ++i)
+	{
+		newthread->t_fdtable[i] = curthread->t_fdtable[i];
+	}
+
 	/* Allocate a stack */
 	newthread->t_stack = kmalloc(STACK_SIZE);
 	if (newthread->t_stack == NULL) {
