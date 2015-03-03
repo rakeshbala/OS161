@@ -67,7 +67,7 @@ int sys_chdir(userptr_t pathname);
 int sys___getcwd(userptr_t buf, size_t buflen,size_t *data_len);
 void sys__exit(int exitcode);
 int sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid);
-int sys_fork(struct trapframe *tf);
+int sys_fork(struct trapframe *tf, pid_t *ret_pid);
 int sys_dup2(int oldfd, int newfd, int *ret_fd);
 
 #endif /* _SYSCALL_H_ */
