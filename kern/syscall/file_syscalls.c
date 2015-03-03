@@ -1,5 +1,5 @@
 /*
- * Author: Rakesh Balasubramanian
+ * Authors: Rakesh Balasubramanian, Ramya Rao
  * Created on: 24th Feb2015
  */
 #include <kern/errno.h>
@@ -101,20 +101,11 @@ sys_read(int fd, userptr_t buf, size_t nbytes, size_t *bytes_read)
 {
 	struct iovec iov;
 	struct uio u;
-	// int err;
 
 	if (buf == NULL)
 	{
 		return EFAULT;
 	}
-
-	// void* kbuf = kmalloc(nbytes);
-	// if ((err = copyout(kbuf, (userptr_t)buf, nbytes+1)) != 0)
-	// {
-	// 	kfree(kbuf);
-	// 	return err;
-	// }
-
 
 	if (fd<0 || fd>=OPEN_MAX)
 	{
@@ -159,20 +150,10 @@ sys_write(int fd, userptr_t buf, size_t nbytes, size_t *bytes_written)
 {
 	struct iovec iov;
 	struct uio u;
-	// int err;
-
 	if (buf == NULL)
 	{
 		return EFAULT;
 	}
-
-	// void* kbuf = kmalloc(nbytes);
-	// if ((err = copyin(buf, kbuf, nbytes+1)) != 0)
-	// {
-	// 	kfree(kbuf);
-	// 	return err;
-	// }
-
 	if ( fd<0 || fd >= OPEN_MAX)
 	{
 		return EBADF;
@@ -294,7 +275,7 @@ int sys_chdir (userptr_t pathname)
 	return 0;
 }
 /*********** RR: 27Feb2015 ***********/
-int sys___getcwd(userptr_t buf, size_t buflen, size_t* data_len)
+int sys___getcwd(userptr_t buf, size_t buflen, size_t *data_len)
 {
 	if(buf == NULL) {
 		return EFAULT;
@@ -316,6 +297,37 @@ int sys___getcwd(userptr_t buf, size_t buflen, size_t* data_len)
 		return err;
 	}
 	*data_len = buflen-u.uio_resid;
+	return 0;
+}
+
+/*********** RR: 28Feb2015 ***********/
+int sys_dup2(int oldfd, int newfd, int *ret_fd)
+{
+	int err = 0;
+	if ((oldfd < 0 || oldfd >= OPEN_MAX) || (newfd < 0 || newfd >= OPEN_MAX))
+	{
+		return EBADF;
+	}
+	struct fdesc *old_fdesc = curthread->t_fdtable[oldfd];
+	struct fdesc *new_fdesc = curthread->t_fdtable[newfd];
+	if(old_fdesc == NULL) {
+		return EBADF;
+	}
+	if (oldfd == newfd)
+	{
+		*ret_fd = oldfd;
+		return 0;
+	}
+	if (new_fdesc != NULL)
+	{
+		err = sys_close(newfd);
+		if (err) {
+			return err;
+		}
+	}
+	curthread->t_fdtable[oldfd]->ref_count++;
+	curthread->t_fdtable[newfd] = curthread->t_fdtable[oldfd];
+	*ret_fd = oldfd;
 	return 0;
 }
 
