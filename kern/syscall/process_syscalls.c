@@ -14,7 +14,7 @@
 #include <lib.h>
 #include <mips/trapframe.h>
 #include <addrspace.h>
-
+#include <copyinout.h>
 
 struct pdesc* g_pdtable[PID_LIMIT];
 void childfork_func(void * ptr, unsigned long data2);
@@ -37,6 +37,7 @@ sys__exit(int exitcode)
 int
 sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 {
+	int err;
 	if(((uintptr_t)status % 4) !=0 ){
 		return EFAULT; // Not aligned
 	}
@@ -44,6 +45,11 @@ sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 	{
 		return EFAULT;
 	}
+	// int stoplen;
+	// int err = copycheck(status, sizeof(userptr_t), &stoplen);
+	// if (err) {
+	// 	return err;
+	// }
 
 	if (pid < 0 || pid >= PID_LIMIT)
 	{
@@ -51,8 +57,8 @@ sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 	}
 
 	if (options != 0 &&
-		(options & WNOHANG) != WNOHANG &&
-		(options & WUNTRACED) != WUNTRACED )
+		options != 1 &&
+		options != 2 )
 	{
 		return EINVAL;
 	}
@@ -68,7 +74,7 @@ sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 		return ECHILD; //Not parent
 	}
 
-	if (pd->exited == false && (options & WNOHANG) == WNOHANG)
+	if (pd->exited == false && options == WNOHANG)
 	{
 		*ret_pid = 0;
 		return 0;
@@ -83,14 +89,14 @@ sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 
 
 	*ret_pid = pid;
-	int err = copyout(&pd->exitcode, status, sizeof(int)) != 0;
+	err = copyout(&pd->exitcode, status, sizeof(int));
 	if (err)
 	{
 		return err;
 	}
 
-	g_pdtable[pid] = NULL;
 	kfree(pd);
+	g_pdtable[pid] = NULL;
 
 	return 0;
 }
@@ -108,11 +114,11 @@ sys_fork(struct trapframe *tf, pid_t *ret_pid)
 		return err;
 	}
 
-	char child_name[30]="child-of-";
-	strcat(child_name,curthread->t_name);
+	// char child_name[30]="child-of-";
+	// strcat(child_name,curthread->t_name);
 
 	struct thread *child_thread;
-	err = thread_fork(child_name, childfork_func, child_tf, (vaddr_t)child_as, &child_thread);
+	err = thread_fork("child", childfork_func, child_tf, (vaddr_t)child_as, &child_thread);
 	if (err)
 	{
 		// kfree(child_tf);

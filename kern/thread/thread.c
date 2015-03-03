@@ -308,7 +308,10 @@ thread_destroy(struct thread *thread)
 	{
 		if (thread->t_fdtable[i] != NULL)
 		{
-			kfree(thread->t_fdtable[i]);
+			if (thread->t_fdtable[i]->ref_count == 1)
+			{
+				kfree(thread->t_fdtable[i]);
+			}
 		}
 	 }
 
@@ -559,7 +562,12 @@ thread_fork(const char *name,
 	/************ RB:Copy file table ************/
 	for (int i = 0; i < OPEN_MAX; ++i)
 	{
-		newthread->t_fdtable[i] = curthread->t_fdtable[i];
+		struct fdesc * fd = curthread->t_fdtable[i];
+		if (fd != NULL)
+		{
+			fd->ref_count++;
+		}
+		newthread->t_fdtable[i] = fd;
 	}
 
 	/* Allocate a stack */
