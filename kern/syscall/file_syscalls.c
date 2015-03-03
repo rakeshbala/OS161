@@ -48,7 +48,7 @@ sys_open(userptr_t filename, int flags, int mode, int *fd)
 	}else
 	{
 		struct vnode * f_vnode;
-		int err = vfs_open((char *)filename, flags, mode, &f_vnode);
+		int err = vfs_open(kbuf, flags, mode, &f_vnode);
 		if (err){
 			return err;
 		}else{
@@ -223,9 +223,11 @@ int sys_lseek(int fd, off_t pos, int whence, off_t *new_pos)
 	if(t_fdesc == NULL) {
 		return EBADF;
 	}
-	if(fd >=0 && fd < 3) {
+	if (strcmp(t_fdesc->name,"con:") == 0)
+	{
 		return ESPIPE;
 	}
+
 	lock_acquire(t_fdesc->lock);
 		off_t offset = 0;
 		int err = 0;
@@ -315,7 +317,7 @@ int sys_dup2(int oldfd, int newfd, int *ret_fd)
 	}
 	if (oldfd == newfd)
 	{
-		*ret_fd = oldfd;
+		*ret_fd = newfd;
 		return 0;
 	}
 	if (new_fdesc != NULL)
@@ -327,7 +329,7 @@ int sys_dup2(int oldfd, int newfd, int *ret_fd)
 	}
 	curthread->t_fdtable[oldfd]->ref_count++;
 	curthread->t_fdtable[newfd] = curthread->t_fdtable[oldfd];
-	*ret_fd = oldfd;
+	*ret_fd = newfd;
 	return 0;
 }
 

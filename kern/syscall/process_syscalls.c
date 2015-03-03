@@ -94,8 +94,7 @@ sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 	{
 		return err;
 	}
-
-	kfree(pd);
+	// pdesc_destroy(pd);
 	g_pdtable[pid] = NULL;
 
 	return 0;
@@ -139,6 +138,7 @@ void childfork_func(void * tf_ptr, unsigned long as)
 	/************ RB:Need trap frame on stack instead of heap ************/
 	struct trapframe tf;
 	memcpy(&tf,tf_ptr,sizeof(struct trapframe));
+	kfree(tf_ptr);
 	/************ RB:Prepare trap fame ************/
 	tf.tf_v0 = 0;
 	tf.tf_a3 = 0;
@@ -146,7 +146,14 @@ void childfork_func(void * tf_ptr, unsigned long as)
 
 	curthread->t_addrspace = (struct addrspace *)as;
 	as_activate(curthread->t_addrspace);
-
 	mips_usermode(&tf);
 
 }
+
+void pdesc_destroy(struct pdesc * pd){
+	cv_destroy(pd->wait_cv);
+	lock_destroy(pd->wait_lock);
+	kfree(pd);
+	pd=NULL;
+}
+

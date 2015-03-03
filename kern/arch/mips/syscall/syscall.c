@@ -176,7 +176,8 @@ syscall(struct trapframe *tf)
 			retval = (int32_t)ret_pid;
 			break;
 		}
-		case SYS_getpid:{
+		case SYS_getpid:
+		{
 			retval = (int32_t)curthread->t_pid;
 			break;
 		}

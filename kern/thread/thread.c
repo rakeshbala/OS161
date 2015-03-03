@@ -178,7 +178,7 @@ thread_create(const char *name)
 				kfree(thread);
 				return NULL;
 			}
-			pd->wait_cv = cv_create("wait-cv");
+			pd->wait_cv = cv_create(thread->t_name);
 			if (pd->wait_cv == NULL)
 			{
 				kfree(pd);
@@ -186,10 +186,10 @@ thread_create(const char *name)
 				kfree(thread);
 				return NULL;
 			}
-			pd->wait_lock = lock_create("wait-lock");
+			pd->wait_lock = lock_create(thread->t_name);
 			if (pd->wait_lock == NULL)
 			{
-				kfree(pd->wait_cv);
+				cv_destroy(pd->wait_cv);
 				kfree(pd);
 				kfree(thread->t_name);
 				kfree(thread);
