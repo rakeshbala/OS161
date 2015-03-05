@@ -37,7 +37,6 @@
 #include <syscall.h>
 #include <copyinout.h>
 
-
 /*
  * System call dispatcher.
  *
@@ -179,6 +178,7 @@ syscall(struct trapframe *tf)
 		case SYS_getpid:
 		{
 			retval = (int32_t)curthread->t_pid;
+			err=0;
 			break;
 		}
 		case SYS__exit:

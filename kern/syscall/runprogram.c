@@ -57,7 +57,8 @@ runprogram(char *progname)
 	struct vnode *v;
 	vaddr_t entrypoint, stackptr;
 	int result;
-
+	char temp_progname[NAME_MAX];
+	strcpy(temp_progname,progname);
 	/* Open the file. */
 	result = vfs_open(progname, O_RDONLY, 0, &v);
 	if (result) {
@@ -67,7 +68,7 @@ runprogram(char *progname)
 	/* We should be a new thread. */
 	KASSERT(curthread->t_addrspace == NULL);
 
-	/* Create a new address space. */
+	// /* Create a new address space. */
 	curthread->t_addrspace = as_create();
 	if (curthread->t_addrspace==NULL) {
 		vfs_close(v);
@@ -156,6 +157,11 @@ runprogram(char *progname)
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
 			  stackptr, entrypoint);
+	// char *argv[1];
+	// strcpy(argv[0],temp_progname);
+	// argv[0] = progname;
+	// enter_new_process(1 /*argc*/, (userptr_t)temp_progname /*userspace addr of argv*/,
+			  // stackptr, entrypoint);
 
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");

@@ -60,6 +60,7 @@
 
 /************ RB:Global process table ************/
 struct pdesc* g_pdtable[PID_LIMIT];
+struct lock * process_lock;
 
 
 /* Wait channel. */
@@ -167,15 +168,21 @@ thread_create(const char *name)
 	}
 
 	/************ RB:PID allocation ************/
+	if (process_lock == NULL)
+	{
+		process_lock = lock_create("process_lock");
+	}
 	for (int i = 1; i < PID_LIMIT; ++i)
 	{
+		lock_acquire(process_lock);
 		if (g_pdtable[i] == NULL)
 		{
-			struct pdesc * pd = kmalloc(sizeof(struct pdesc *));
+			struct pdesc * pd = kmalloc(sizeof(struct pdesc));
 			if (pd == NULL)
 			{
 				kfree(thread->t_name);
 				kfree(thread);
+				lock_release(process_lock);
 				return NULL;
 			}
 			pd->wait_cv = cv_create(thread->t_name);
@@ -184,6 +191,7 @@ thread_create(const char *name)
 				kfree(pd);
 				kfree(thread->t_name);
 				kfree(thread);
+				lock_release(process_lock);
 				return NULL;
 			}
 			pd->wait_lock = lock_create(thread->t_name);
@@ -193,6 +201,7 @@ thread_create(const char *name)
 				kfree(pd);
 				kfree(thread->t_name);
 				kfree(thread);
+				lock_release(process_lock);
 				return NULL;
 			}
 
@@ -207,8 +216,11 @@ thread_create(const char *name)
 			pd->self = thread;
 			g_pdtable[i] = pd;
 			thread->t_pid = i;
+			lock_release(process_lock);
 			break;
 		}
+		lock_release(process_lock);
+
 	}
 
 	return thread;
@@ -556,6 +568,19 @@ thread_fork(const char *name,
 	newthread = thread_create(name);
 	if (newthread == NULL) {
 		return ENOMEM;
+	}
+
+	/************ RB:Assign address space ************/
+	if (curthread->t_addrspace != NULL)
+	{
+		struct addrspace *child_as;
+		int err = as_copy(curthread->t_addrspace, &child_as);
+		if (err)
+		{
+			return err;
+		}
+		newthread->t_addrspace = child_as;
+		as_activate(newthread->t_addrspace);
 	}
 
 

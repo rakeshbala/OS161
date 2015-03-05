@@ -238,6 +238,7 @@ mips_trap(struct trapframe *tf)
 		DEBUG(DB_SYSCALL, "syscall: #%d, args %x %x %x %x\n",
 		      tf->tf_v0, tf->tf_a0, tf->tf_a1, tf->tf_a2, tf->tf_a3);
 
+		// kprintf("syscall: #%d, args %x %x %x %x\n",tf->tf_v0, tf->tf_a0, tf->tf_a1, tf->tf_a2, tf->tf_a3);
 		syscall(tf);
 		goto done;
 	}

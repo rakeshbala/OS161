@@ -40,7 +40,7 @@
 
 
 /* Flags word for DEBUG() macro. */
-uint32_t dbflags = 0;
+uint32_t dbflags = 1;
 
 /* Lock for non-polled kprintfs */
 static struct lock *kprintf_lock;
@@ -136,7 +136,7 @@ panic(const char *fmt, ...)
 
 	/*
 	 * When we reach panic, the system is usually fairly screwed up.
-	 * It's not entirely uncommon for anything else we try to do 
+	 * It's not entirely uncommon for anything else we try to do
 	 * here to trigger more panics.
 	 *
 	 * This variable makes sure that if we try to do something here,

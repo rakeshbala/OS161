@@ -21,6 +21,8 @@ struct pdesc
 };
 
 extern struct pdesc* g_pdtable[PID_LIMIT];
+extern struct lock * process_lock;
+
 
 void pdesc_destroy(struct pdesc * pd);
 

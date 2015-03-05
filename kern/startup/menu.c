@@ -42,6 +42,7 @@
 #include <test.h>
 #include <synch.h>
 #include <kern/procsys.h>
+#include <syscall.h>
 
 #include "opt-synchprobs.h"
 #include "opt-sfs.h"
@@ -111,6 +112,7 @@ cmd_progthread(void *ptr, unsigned long nargs)
 	if (result) {
 		kprintf("Running program %s failed: %s\n", args[0],
 			strerror(result));
+		sys__exit(0);
 		return;
 	}
 
@@ -150,13 +152,9 @@ common_prog(int nargs, char **args)
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		return result;
 	}
-	struct pdesc *pd = g_pdtable[child->t_pid];
-	lock_acquire(pd->wait_lock);
-	while (pd->exited == false)
-	{
-		cv_wait(pd->wait_cv, pd->wait_lock);
-	}
-	lock_release(pd->wait_lock);
+	int status;
+	pid_t pid;
+	sys_waitpid(child->t_pid,(userptr_t)&status,0, &pid);
 	return 0;
 }
 

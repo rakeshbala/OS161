@@ -308,7 +308,7 @@ main(int argc, char **argv)
 			if (op==EOF) {
 				break;
 			}
-			printf("%c\n", op);
+			printf("Chose %c\n", op);
 			runit(op);
 		}
 	}

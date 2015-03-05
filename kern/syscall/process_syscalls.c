@@ -94,7 +94,7 @@ sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 	{
 		return err;
 	}
-	// pdesc_destroy(pd);
+	pdesc_destroy(pd);
 	g_pdtable[pid] = NULL;
 
 	return 0;
@@ -105,13 +105,13 @@ sys_fork(struct trapframe *tf, pid_t *ret_pid)
 {
 	struct trapframe *child_tf = kmalloc(sizeof(struct trapframe));
 	memcpy(child_tf,tf,sizeof(struct trapframe));
-
+	int err;
 	struct addrspace *child_as;
-	int err = as_copy(curthread->t_addrspace, &child_as);
-	if (err)
-	{
-		return err;
-	}
+	// int err = as_copy(curthread->t_addrspace, &child_as);
+	// if (err)
+	// {
+	// 	return err;
+	// }
 
 	// char child_name[30]="child-of-";
 	// strcat(child_name,curthread->t_name);
@@ -143,9 +143,7 @@ void childfork_func(void * tf_ptr, unsigned long as)
 	tf.tf_v0 = 0;
 	tf.tf_a3 = 0;
 	tf.tf_epc += 4;
-
-	curthread->t_addrspace = (struct addrspace *)as;
-	as_activate(curthread->t_addrspace);
+	(void)as;
 	mips_usermode(&tf);
 
 }
@@ -154,5 +152,4 @@ void pdesc_destroy(struct pdesc * pd){
 	cv_destroy(pd->wait_cv);
 	lock_destroy(pd->wait_lock);
 	kfree(pd);
-	pd=NULL;
 }

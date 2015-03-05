@@ -80,7 +80,10 @@ check(void)
 	for (i=0; i<800; i++) {
 		volatile int seenpid;
 		seenpid = mypid;
-		if (seenpid != getpid()) {
+		int tempid = getpid();
+		if (seenpid != tempid) {
+			printf("tempid = %d\n",tempid);
+
 			errx(1, "pid mismatch (%d, should be %d) "
 			     "- your vm is broken!",
 			     seenpid, getpid());
