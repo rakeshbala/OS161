@@ -570,18 +570,7 @@ thread_fork(const char *name,
 		return ENOMEM;
 	}
 
-	/************ RB:Assign address space ************/
-	if (curthread->t_addrspace != NULL)
-	{
-		struct addrspace *child_as;
-		int err = as_copy(curthread->t_addrspace, &child_as);
-		if (err)
-		{
-			return err;
-		}
-		newthread->t_addrspace = child_as;
-		as_activate(newthread->t_addrspace);
-	}
+
 
 
 	/************ RB:Copy file table ************/
@@ -606,6 +595,19 @@ thread_fork(const char *name,
 	/*
 	 * Now we clone various fields from the parent thread.
 	 */
+
+	 /************ RB:Assign address space ************/
+	if (curthread->t_addrspace != NULL)
+	{
+		struct addrspace *child_as;
+		int err = as_copy(curthread->t_addrspace, &child_as);
+		if (err)
+		{
+			return err;
+		}
+		newthread->t_addrspace = child_as;
+		as_activate(newthread->t_addrspace);
+	}
 
 	/* Thread subsystem fields */
 	newthread->t_cpu = curthread->t_cpu;

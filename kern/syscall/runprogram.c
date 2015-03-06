@@ -45,6 +45,7 @@
 #include <syscall.h>
 #include <test.h>
 #include <synch.h>
+#include <copyinout.h>
 /*
  * Load program "progname" and start running it in usermode.
  * Does not return except on error.
@@ -157,11 +158,26 @@ runprogram(char *progname)
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
 			  stackptr, entrypoint);
-	// char *argv[1];
-	// strcpy(argv[0],temp_progname);
-	// argv[0] = progname;
-	// enter_new_process(1 /*argc*/, (userptr_t)temp_progname /*userspace addr of argv*/,
-			  // stackptr, entrypoint);
+	// int progname_len = strlen(temp_progname);
+	// int padding = (progname_len+1)%4;
+	// char *kbuf[1+progname_len+1+padding+1];
+	// kbuf[0]=(char *)kbuf+1;
+	// strcpy(kbuf[1],temp_progname);
+	// for (int i = progname_len+2; i <= progname_len+2+padding; ++i)
+	// {
+	// 	kbuf[i]='\0';
+	// }
+	// kbuf[progname_len+2+padding+1]=NULL;
+	// int err = 0;
+	// int copylen = 1+progname_len+1+padding+1;
+	// stackptr -= copylen;
+
+	// if ((err = copyout(kbuf, (userptr_t)stackptr, copylen)) != 0)
+	// {
+	// 	return err;
+	// }
+	// enter_new_process(1 /*argc*/, (userptr_t)stackptr /*userspace addr of argv*/,
+	// 		  stackptr, entrypoint);
 
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
