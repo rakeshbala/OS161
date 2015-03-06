@@ -79,6 +79,10 @@ sys_open(userptr_t filename, int flags, int mode, int *fd)
 			}else{
 
 				struct fdesc *file_fd = kmalloc(sizeof(struct fdesc));
+				if (file_fd == NULL)
+				{
+					return ENOMEM;
+				}
 				strcpy(file_fd->name,(char *)filename);
 
 					/************ RB:Change this lock name later - Not nice ************/
