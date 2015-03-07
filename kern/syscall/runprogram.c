@@ -155,30 +155,40 @@ runprogram(char *progname)
 
 
 
-	/* Warp to user mode. */
+#if 0
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
 			  stackptr, entrypoint);
-	// int progname_len = strlen(temp_progname);
-	// int padding = (progname_len+1)%4;
-	// char *kbuf[1+progname_len+1+padding+1];
-	// kbuf[0]=(char *)kbuf+1;
-	// strcpy(kbuf[1],temp_progname);
-	// for (int i = progname_len+2; i <= progname_len+2+padding; ++i)
-	// {
-	// 	kbuf[i]='\0';
-	// }
-	// kbuf[progname_len+2+padding+1]=NULL;
-	// int err = 0;
-	// int copylen = 1+progname_len+1+padding+1;
-	// stackptr -= copylen;
+#else
+	int err;
+	/************ RB:Calculate total amout to be copied ************/
+	int progname_len = strlen(temp_progname);
+	int padding = 4-((progname_len+1)%4);		//align by 4 (including \0 at the end)
+	int copylen = 8+progname_len+1+padding;		//First 8 = 2*4 is the size of 2 pointers
+	stackptr -= copylen;						//Reduce stackptr to accomodate full copy
 
-	// if ((err = copyout(kbuf, (userptr_t)stackptr, copylen)) != 0)
-	// {
-	// 	return err;
-	// }
-	// enter_new_process(1 /*argc*/, (userptr_t)stackptr /*userspace addr of argv*/,
-	// 		  stackptr, entrypoint);
+	size_t actual;
+	if ((err = copyoutstr(temp_progname, (userptr_t)stackptr+8, progname_len+1, &actual)) != 0)
+	{
+		return err;
+	}
 
+	char *kbuf[2];
+	kbuf[0]=(char *)(stackptr+8);
+	kbuf[1]= NULL;
+
+	/************ RB: Null out padding ************/
+	for (int i = progname_len; i < progname_len+padding+1; ++i)
+	{
+		kbuf[0][i] = '\0';
+	}
+	if ((err = copyout(kbuf, (userptr_t)stackptr, sizeof(kbuf))) != 0)
+	{
+		return err;
+	}
+	enter_new_process(1 /*argc*/, (userptr_t)stackptr /*userspace addr of argv*/,
+			  stackptr, entrypoint);
+
+#endif
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
 	return EINVAL;

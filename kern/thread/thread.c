@@ -161,7 +161,10 @@ thread_create(const char *name)
 	thread->t_cwd = NULL;
 
 	/* If you add to struct thread, be sure to initialize here */
-	/* FD table */
+	/* RB: Priority init */
+	thread->t_priority = 0;
+
+	/* RR: FD table */
 	for (int i = 0; i < OPEN_MAX; ++i)
 	{
 		thread->t_fdtable[i] = 0;
@@ -660,6 +663,30 @@ static
 void
 thread_switch(threadstate_t newstate, struct wchan *wc)
 {
+
+	/************ RB:Scheduling begin ************/
+
+	switch (newstate) {
+		case S_SLEEP: {
+			if (curthread->t_priority <= 5)
+			{
+				curthread->t_priority++;
+			}
+			break;
+		}
+		case S_READY: {
+			if (curthread->t_priority >= -5)
+			{
+				curthread->t_priority--;
+			}
+			break;
+		}
+		default:
+			break;
+	}
+
+	/************ RB:Scheduling end ************/
+
 	struct thread *cur, *next;
 	int spl;
 
@@ -961,6 +988,40 @@ schedule(void)
 {
   // 28 Feb 2012 : GWA : Implement your scheduler that prioritizes
   // "interactive" threads here.
+  /************ RB:MLFQ Implementation ************/
+	/************ RB:Reset prioriteis ************/
+	static int reset_counter = 0;
+	reset_counter++;
+	struct threadlistnode * iter = curcpu->c_runqueue.tl_head.tln_next;
+	if (reset_counter == 100)
+	{
+		while ( iter->tln_next != NULL )
+		{
+			iter->tln_self->t_priority = 0;
+			iter = iter->tln_next;
+		}
+		return; // No need to schedule this time
+	}
+
+	int max = -5;
+	struct thread *run_me = NULL;
+	iter = curcpu->c_runqueue.tl_head.tln_next;
+	while (iter->tln_next != NULL)
+	{
+		int cur_priority =  iter->tln_self->t_priority;
+		if (cur_priority > max)
+		{
+			max = cur_priority;
+			run_me = iter->tln_self;
+		}
+		iter = iter->tln_next;
+	}
+	if (run_me)
+	{
+		threadlist_remove(&(curcpu->c_runqueue),run_me);
+		threadlist_addhead(&(curcpu->c_runqueue),run_me);
+	}
+
 }
 #endif
 

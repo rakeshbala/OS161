@@ -117,8 +117,9 @@ struct thread {
 	/* add more here as needed */
 	/* RB: File table */
 	struct fdesc *t_fdtable[OPEN_MAX];
-
-	/************ RB:Pid ************/
+	/* RB: Thread priority for scheduling */
+	int t_priority;
+	/* RB:Pid */
 	pid_t t_pid;
 };
 

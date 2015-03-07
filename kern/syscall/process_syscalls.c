@@ -104,27 +104,19 @@ int
 sys_fork(struct trapframe *tf, pid_t *ret_pid)
 {
 	struct trapframe *child_tf = kmalloc(sizeof(struct trapframe));
+	if (child_tf == NULL)
+	{
+		return ENOMEM;
+	}
 	memcpy(child_tf,tf,sizeof(struct trapframe));
 	int err;
-	struct addrspace *child_as;
-	// int err = as_copy(curthread->t_addrspace, &child_as);
-	// if (err)
-	// {
-	// 	return err;
-	// }
-
-	// char child_name[30]="child-of-";
-	// strcat(child_name,curthread->t_name);
 
 	struct thread *child_thread;
-	err = thread_fork("child", childfork_func, child_tf, (vaddr_t)child_as, &child_thread);
+	err = thread_fork("child", childfork_func, child_tf, (vaddr_t)NULL, &child_thread);
 	if (err)
 	{
-		// kfree(child_tf);
 		return err;
 	}
-	/************ RB:Maybe freeing too many times ************/
-	// kfree(child_tf);
 
 	*ret_pid = child_thread->t_pid;
 	return 0;
