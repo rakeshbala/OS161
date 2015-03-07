@@ -47,7 +47,7 @@ sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid)
 	{
 		return EFAULT;
 	}
-	
+
 	if (pid < 0 || pid >= PID_LIMIT)
 	{
 		return ESRCH;
@@ -136,41 +136,61 @@ void childfork_func(void * tf_ptr, unsigned long as)
 	mips_usermode(&tf);
 }
 
-int sys_execv(char *program, char **uargs, int *ret)
+int
+sys_execv(userptr_t u_program, userptr_t u_uargs)
 {
+
 	int err = 0;
+
+	char program[NAME_MAX];
+	size_t actual;
+	err = copyinstr(u_program, program, NAME_MAX, &actual);
+	if (err)
+	{
+		return err;
+	}
+
+	char *uargs[ARG_MAX];
+	err = copyin(u_uargs,uargs,ARG_MAX);
+	if (err)
+	{
+		return err;
+	}
+
 	int index = 0;
 	char* kbuf[ARG_MAX];
-	int arg_length;
 	int copylength = 0;
 	while(uargs[index] != NULL) {
-		arg_length = strlen(uargs[index]);
-		int padding = 4-((arg_length+1)%4);		//align by 4 (including \0 at the end)
-		char temp_arg[arg_length+padding];
-		err = copyin((const_userptr_t) uargs[index],temp_arg, (size_t)arg_length-1);
+		int arg_length = strlen(uargs[index]);
+		char temp_arg[arg_length+1];
+		err = copyin((const_userptr_t) uargs[index],temp_arg, (size_t)arg_length+1);
 		if (err) {
 			return err;
 		}
 		kbuf[index] = temp_arg;
-		for (int i = arg_length; i < arg_length+padding+1; ++i)
-		{
-			kbuf[index][i] = '\0';
-		}
+
+		int padding = 4-((arg_length+1)%4);		//align by 4 (including \0 at the end)
 		copylength += arg_length+padding +1;
 		index++;
 	}
-	copylength += 4*(index+1);
 	int argc = index-1;
+	copylength += 4*(argc+1);
+
+	/************ RR:Rest of run program ************/
 	struct vnode *v;
 	vaddr_t entrypoint, stackptr;
-	int result;
-	result = vfs_open(program, O_RDONLY, 0, &v);
-	if (result) {
-		return result;
+	err = vfs_open(program, O_RDONLY, 0, &v);
+	if (err) {
+		return err;
 	}
 
 	/* We should be a new thread. */
-	KASSERT(curthread->t_addrspace == NULL);
+	if (curthread->t_addrspace != NULL)
+	{
+		as_destroy(curthread->t_addrspace);
+	}
+
+
 	// /* Create a new address space. */
 	curthread->t_addrspace = as_create();
 	if (curthread->t_addrspace==NULL) {
@@ -180,38 +200,43 @@ int sys_execv(char *program, char **uargs, int *ret)
 	/* Activate it. */
 	as_activate(curthread->t_addrspace);
 	/* Load the executable. */
-	result = load_elf(v, &entrypoint);
-	if (result) {
+	err = load_elf(v, &entrypoint);
+	if (err) {
 		/* thread_exit destroys curthread->t_addrspace */
 		vfs_close(v);
-		return result;
+		return err;
 	}
 	/* Done with the file now. */
 	vfs_close(v);
 	/* Define the user stack in the address space */
-	result = as_define_stack(curthread->t_addrspace, &stackptr);
-	if (result) {
+	err = as_define_stack(curthread->t_addrspace, &stackptr);
+	if (err) {
 		/* thread_exit destroys curthread->t_addrspace */
-		return result;
+		return err;
 	}
+
+	/************ RB:Pack the variables and dispatch them ************/
 	stackptr -= copylength;
 	int prev_offset = 0;
-	char* ret_buf[index];
-	int l = 0;
+	char* ret_buf[argc];
 	/*********** RR:moving contents from kernel buffer to user stack ***********/
-	for (int l = 0; l < index+1; ++l)
+	for (int l = 0; l < argc; ++l)
 	{
-		arg_length = strlen(kbuf[l]);
+		int arg_length = strlen(kbuf[l]);
 		int padding = 4-((arg_length+1)%4);
-		int dest = stackptr+(index+1)*4+prev_offset;
-		err = copyout(kbuf[l],(userptr_t)dest,(size_t)arg_length+padding);
+		char * dest = (char *)stackptr+(index+1)*4+prev_offset;
+		err = copyout(kbuf[l],(userptr_t)dest,(size_t)arg_length+1);
 		if (err) {
 			return err;
 		}
-		ret_buf[l] = (char *)(stackptr+(index+1+l)*4+prev_offset);
+		for (int i = arg_length; i < arg_length+padding+1; ++i)
+		{
+			kbuf[l][i] = '\0';
+		}
+		ret_buf[l] = (char *)dest;
 		prev_offset += (arg_length+padding);
 	}
-	ret_buf[l] = NULL;
+	ret_buf[argc] = NULL;
 	err = copyout(ret_buf,(userptr_t)stackptr, sizeof(ret_buf));
 	if (err) {
 		return err;
@@ -220,7 +245,6 @@ int sys_execv(char *program, char **uargs, int *ret)
 	enter_new_process(argc, (userptr_t)stackptr /*userspace addr of argv*/,
 			  stackptr, entrypoint);
 	/* enter_new_process does not return. */
-	*ret = -1;
 	panic("enter_new_process returned\n");
 	return EINVAL;
 }

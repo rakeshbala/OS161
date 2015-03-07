@@ -576,16 +576,7 @@ thread_fork(const char *name,
 
 
 
-	/************ RB:Copy file table ************/
-	for (int i = 0; i < OPEN_MAX; ++i)
-	{
-		struct fdesc * fd = curthread->t_fdtable[i];
-		if (fd != NULL)
-		{
-			fd->ref_count++;
-		}
-		newthread->t_fdtable[i] = fd;
-	}
+
 
 	/* Allocate a stack */
 	newthread->t_stack = kmalloc(STACK_SIZE);
@@ -598,6 +589,17 @@ thread_fork(const char *name,
 	/*
 	 * Now we clone various fields from the parent thread.
 	 */
+
+	/************ RB:Copy file table ************/
+	 for (int i = 0; i < OPEN_MAX; ++i)
+	 {
+	 	struct fdesc * fd = curthread->t_fdtable[i];
+	 	if (fd != NULL)
+	 	{
+	 		fd->ref_count++;
+	 	}
+	 	newthread->t_fdtable[i] = fd;
+	 }
 
 	 /************ RB:Assign address space ************/
 	if (curthread->t_addrspace != NULL)
@@ -1000,9 +1002,11 @@ schedule(void)
 			iter->tln_self->t_priority = 0;
 			iter = iter->tln_next;
 		}
+		reset_counter = 0;
 		return; // No need to schedule this time
 	}
 
+	/************ RB:Schedule ************/
 	int max = -5;
 	struct thread *run_me = NULL;
 	iter = curcpu->c_runqueue.tl_head.tln_next;

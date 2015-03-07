@@ -69,6 +69,6 @@ void sys__exit(int exitcode);
 int sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid);
 int sys_fork(struct trapframe *tf, pid_t *ret_pid);
 int sys_dup2(int oldfd, int newfd, int *ret_fd);
-int sys_execv(char *program, char **args, int *ret);
+int sys_execv(userptr_t program, userptr_t args);
 
 #endif /* _SYSCALL_H_ */

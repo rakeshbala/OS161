@@ -80,7 +80,7 @@ syscall(struct trapframe *tf)
 {
 	int callno;
 	int32_t retval;
-	int err=0;
+	int err = 0;
 
 	KASSERT(curthread != NULL);
 	KASSERT(curthread->t_curspl == 0);
@@ -178,7 +178,7 @@ syscall(struct trapframe *tf)
 		case SYS_getpid:
 		{
 			retval = (int32_t)curthread->t_pid;
-			err=0;
+			err = 0;
 			break;
 		}
 		case SYS__exit:
@@ -194,12 +194,15 @@ syscall(struct trapframe *tf)
 
 		case SYS_fork:
 		{
-			pid_t ret_pid;
-			err = sys_fork(tf, &ret_pid);
+			pid_t ret_pid
+;			err = sys_fork(tf, &ret_pid);
 			retval = (int32_t)ret_pid;
 			break;
 		}
-
+		case SYS_execv:{
+			err = sys_execv((userptr_t)tf->tf_a0,(userptr_t)tf->tf_a1);
+			break;
+		}
 	    default:
 		kprintf("Unknown syscall %d\n", callno);
 		err = ENOSYS;
