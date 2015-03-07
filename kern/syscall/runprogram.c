@@ -163,11 +163,12 @@ runprogram(char *progname)
 	/************ RB:Calculate total amout to be copied ************/
 	int progname_len = strlen(temp_progname);
 	int padding = 4-((progname_len+1)%4);		//align by 4 (including \0 at the end)
-	int copylen = 8+progname_len+1+padding;		//First 8 = 2*4 is the size of 2 pointers
+	int copylen = 8+progname_len+1+padding;		//First 8 = 2*4 is the size of 2 pointers		
 	stackptr -= copylen;						//Reduce stackptr to accomodate full copy
 
 	size_t actual;
-	if ((err = copyoutstr(temp_progname, (userptr_t)stackptr+8, progname_len+1, &actual)) != 0)
+	err = copyoutstr(temp_progname, (userptr_t)stackptr+8, progname_len+1, &actual);
+	if(err)
 	{
 		return err;
 	}
