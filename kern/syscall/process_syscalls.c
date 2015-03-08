@@ -161,12 +161,15 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 
 	int index = 0;
 	int copylength = 0;
+	char *kbuf[MAX_ARG_NUM];
 	while(uargs[index] != NULL) {
 		int arg_length = strlen(uargs[index]);
-		err = copyin((const userptr_t) uargs[index], (char *)uargs[index], (size_t)arg_length+1);
+		char temp_arg[arg_length];
+		err = copyin((const userptr_t) uargs[index], (char *)temp_arg, (size_t)arg_length+1);
 		if (err) {
 			return err;
 		}
+		kbuf[index] = temp_arg;
 		int padding = (4-((arg_length+1)%4))%4;		//align by 4 (including \0 at the end)
 		copylength += arg_length+padding +1;
 		index++;
@@ -224,16 +227,16 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	/*********** RR:moving contents from kernel buffer to user stack ***********/
 	for (int l = 0; l < argc; ++l)
 	{
-		int arg_length = strlen(uargs[l]);
+		int arg_length = strlen(kbuf[l]);
 		int padding = (4-((arg_length+1)%4))%4;
 		char * dest = (char *)stackptr+(index+1)*4+prev_offset;
-		err = copyout(uargs[l],(userptr_t)dest,(size_t)arg_length+1);
+		err = copyout(kbuf[l],(userptr_t)dest,(size_t)arg_length+1);
 		if (err) {
 			return err;
 		}
 		for (int i = arg_length; i < arg_length+padding+1; ++i)
 		{
-			uargs[l][i] = '\0';
+			kbuf[l][i] = '\0';
 		}
 		ret_buf[l] = (char *)dest;
 		prev_offset += (arg_length+padding);
