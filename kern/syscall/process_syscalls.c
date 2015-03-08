@@ -270,7 +270,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 			dest[i] = '\0';
 		}
 		ret_buf[l] = (char *)dest;
-		prev_offset += (arg_length+padding);
+		prev_offset += (arg_length+padding+1);
 	}
 	ret_buf[argc] = NULL;
 	err = copyout(ret_buf,(userptr_t)stackptr, sizeof(ret_buf));
