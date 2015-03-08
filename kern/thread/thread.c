@@ -591,15 +591,15 @@ thread_fork(const char *name,
 	 */
 
 	/************ RB:Copy file table ************/
-	 for (int i = 0; i < OPEN_MAX; ++i)
-	 {
-	 	struct fdesc * fd = curthread->t_fdtable[i];
-	 	if (fd != NULL)
-	 	{
-	 		fd->ref_count++;
-	 	}
-	 	newthread->t_fdtable[i] = fd;
-	 }
+	for (int i = 0; i < OPEN_MAX; ++i)
+	{
+		struct fdesc * fd = curthread->t_fdtable[i];
+		if (fd != NULL)
+		{
+			fd->ref_count++;
+		}
+		newthread->t_fdtable[i] = fd;
+	}
 
 	 /************ RB:Assign address space ************/
 	if (curthread->t_addrspace != NULL)
