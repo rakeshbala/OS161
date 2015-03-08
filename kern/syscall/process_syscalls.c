@@ -20,6 +20,7 @@
 
 
 #define MAX_ARG_NUM 100
+#define MAX_ARG_LENGTH 100
 
 struct pdesc* g_pdtable[PID_LIMIT];
 void childfork_func(void * ptr, unsigned long data2);
@@ -146,11 +147,19 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	char program[NAME_MAX];
 	size_t actual;
 	int err = 0;
+
 	err = copyinstr(u_program, program, NAME_MAX, &actual);
 	if (err)
 	{
 		return err;
 	}
+
+
+	if (strcmp((char *)u_program,"") == 0)
+	{
+		return EISDIR;
+	}
+
 
 	char *uargs[MAX_ARG_NUM];
 	err = copyin(u_uargs,uargs,MAX_ARG_NUM);
@@ -163,13 +172,12 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	int copylength = 0;
 	char *kbuf[MAX_ARG_NUM];
 	while(uargs[index] != NULL) {
-		int arg_length = strlen(uargs[index]);
-		kbuf[index] = kmalloc(arg_length);
+		kbuf[index] = kmalloc(MAX_ARG_LENGTH);
 		if (kbuf[index] == NULL)
 		{
 			return ENOMEM;
 		}
-		err = copyin((const userptr_t) uargs[index], (char *)kbuf[index], (size_t)arg_length+1);
+		err = copyin((const userptr_t) uargs[index], (char *)kbuf[index], (size_t)MAX_ARG_LENGTH);
 		if (err) {
 			for (int i = 0; i <= index; ++i)
 			{
@@ -177,6 +185,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 			}
 			return err;
 		}
+		int arg_length = strlen(uargs[index]);
 		int padding = (4-((arg_length+1)%4))%4;		//align by 4 (including \0 at the end)
 		copylength += arg_length+padding +1;
 		index++;
