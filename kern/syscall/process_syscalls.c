@@ -202,7 +202,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	/* Free . */
 	if (curthread->t_addrspace != NULL)
 	{
-		as_destro(curthread->t_addrspace);
+		as_destroy(curthread->t_addrspace);
 	}
 
 
