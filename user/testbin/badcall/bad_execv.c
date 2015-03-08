@@ -51,7 +51,6 @@ exec_common_fork(void)
 		warn("UH-OH: fork failed");
 		return -1;
 	}
-	
 	if (pid==0) {
 		/* child */
 		return 0;

@@ -18,6 +18,9 @@
 #include <vfs.h>
 #include <copyinout.h>
 
+
+#define MAX_ARG_NUM 100
+
 struct pdesc* g_pdtable[PID_LIMIT];
 void childfork_func(void * ptr, unsigned long data2);
 
@@ -140,54 +143,53 @@ int
 sys_execv(userptr_t u_program, userptr_t u_uargs)
 {
 
-	int err = 0;
-
 	char program[NAME_MAX];
 	size_t actual;
+	int err = 0;
 	err = copyinstr(u_program, program, NAME_MAX, &actual);
 	if (err)
 	{
 		return err;
 	}
 
-	char *uargs[ARG_MAX];
-	err = copyin(u_uargs,uargs,ARG_MAX);
+	char *uargs[MAX_ARG_NUM];
+	err = copyin(u_uargs,uargs,MAX_ARG_NUM);
 	if (err)
 	{
 		return err;
 	}
 
 	int index = 0;
-	char* kbuf[ARG_MAX];
 	int copylength = 0;
 	while(uargs[index] != NULL) {
 		int arg_length = strlen(uargs[index]);
-		char temp_arg[arg_length+1];
-		err = copyin((const_userptr_t) uargs[index],temp_arg, (size_t)arg_length+1);
+		err = copyin((const userptr_t) uargs[index], (char *)uargs[index], (size_t)arg_length+1);
 		if (err) {
 			return err;
 		}
-		kbuf[index] = temp_arg;
-
-		int padding = 4-((arg_length+1)%4);		//align by 4 (including \0 at the end)
+		int padding = (4-((arg_length+1)%4))%4;		//align by 4 (including \0 at the end)
 		copylength += arg_length+padding +1;
 		index++;
 	}
-	int argc = index-1;
+	int argc = index;
 	copylength += 4*(argc+1);
 
 	/************ RR:Rest of run program ************/
 	struct vnode *v;
 	vaddr_t entrypoint, stackptr;
-	err = vfs_open(program, O_RDONLY, 0, &v);
+	int prog_len = strlen(program);
+	char temp_progname[prog_len];
+	strcpy(temp_progname,program);
+	err = vfs_open(temp_progname, O_RDONLY, 0, &v);
 	if (err) {
 		return err;
 	}
 
 	/* We should be a new thread. */
+	struct addrspace *parent_as;
 	if (curthread->t_addrspace != NULL)
 	{
-		as_destroy(curthread->t_addrspace);
+		parent_as = curthread->t_addrspace;
 	}
 
 
@@ -202,7 +204,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	/* Load the executable. */
 	err = load_elf(v, &entrypoint);
 	if (err) {
-		/* thread_exit destroys curthread->t_addrspace */
+		 // thread_exit destroys curthread->t_addrspace
 		vfs_close(v);
 		return err;
 	}
@@ -218,20 +220,20 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	/************ RB:Pack the variables and dispatch them ************/
 	stackptr -= copylength;
 	int prev_offset = 0;
-	char* ret_buf[argc];
+	char* ret_buf[argc+1];
 	/*********** RR:moving contents from kernel buffer to user stack ***********/
 	for (int l = 0; l < argc; ++l)
 	{
-		int arg_length = strlen(kbuf[l]);
-		int padding = 4-((arg_length+1)%4);
+		int arg_length = strlen(uargs[l]);
+		int padding = (4-((arg_length+1)%4))%4;
 		char * dest = (char *)stackptr+(index+1)*4+prev_offset;
-		err = copyout(kbuf[l],(userptr_t)dest,(size_t)arg_length+1);
+		err = copyout(uargs[l],(userptr_t)dest,(size_t)arg_length+1);
 		if (err) {
 			return err;
 		}
 		for (int i = arg_length; i < arg_length+padding+1; ++i)
 		{
-			kbuf[l][i] = '\0';
+			uargs[l][i] = '\0';
 		}
 		ret_buf[l] = (char *)dest;
 		prev_offset += (arg_length+padding);
@@ -242,10 +244,19 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		return err;
 	}
 
+
+	if (parent_as != NULL)
+	{
+		as_destroy(parent_as);
+	}
+
 	enter_new_process(argc, (userptr_t)stackptr /*userspace addr of argv*/,
 			  stackptr, entrypoint);
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
+
+	(void)u_program;
+	(void)u_uargs;
 	return EINVAL;
 }
 
