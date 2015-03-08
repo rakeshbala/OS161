@@ -267,7 +267,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		}
 		for (int i = arg_length; i < arg_length+padding+1; ++i)
 		{
-			kbuf[l][i] = '\0';
+			dest[i] = '\0';
 		}
 		ret_buf[l] = (char *)dest;
 		prev_offset += (arg_length+padding);
