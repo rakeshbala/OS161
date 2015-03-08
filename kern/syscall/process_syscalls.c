@@ -199,11 +199,10 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		return err;
 	}
 
-	/* We should be a new thread. */
-	struct addrspace *parent_as;
+	/* Free . */
 	if (curthread->t_addrspace != NULL)
 	{
-		parent_as = curthread->t_addrspace;
+		as_destro(curthread->t_addrspace);
 	}
 
 
@@ -267,6 +266,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	ret_buf[argc] = NULL;
 	err = copyout(ret_buf,(userptr_t)stackptr, sizeof(ret_buf));
 	if (err) {
+
 		for (int i = 0; i < argc; ++i)
 		{
 			kfree(kbuf[i]);
@@ -278,11 +278,6 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	{
 		kfree(kbuf[i]);
 	}
-	if (parent_as != NULL)
-	{
-		as_destroy(parent_as);
-	}
-
 	enter_new_process(argc, (userptr_t)stackptr /*userspace addr of argv*/,
 			  stackptr, entrypoint);
 	/* enter_new_process does not return. */
