@@ -164,12 +164,19 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	char *kbuf[MAX_ARG_NUM];
 	while(uargs[index] != NULL) {
 		int arg_length = strlen(uargs[index]);
-		char temp_arg[arg_length];
-		err = copyin((const userptr_t) uargs[index], (char *)temp_arg, (size_t)arg_length+1);
+		kbuf[index] = kmalloc(arg_length);
+		if (kbuf[index] == NULL)
+		{
+			return ENOMEM;
+		}
+		err = copyin((const userptr_t) uargs[index], (char *)kbuf[index], (size_t)arg_length+1);
 		if (err) {
+			for (int i = 0; i <= index; ++i)
+			{
+				kfree(kbuf[i]);
+			}
 			return err;
 		}
-		kbuf[index] = temp_arg;
 		int padding = (4-((arg_length+1)%4))%4;		//align by 4 (including \0 at the end)
 		copylength += arg_length+padding +1;
 		index++;
@@ -185,6 +192,10 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	strcpy(temp_progname,program);
 	err = vfs_open(temp_progname, O_RDONLY, 0, &v);
 	if (err) {
+		for (int i = 0; i < argc; ++i)
+		{
+			kfree(kbuf[i]);
+		}
 		return err;
 	}
 
@@ -208,6 +219,10 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	err = load_elf(v, &entrypoint);
 	if (err) {
 		 // thread_exit destroys curthread->t_addrspace
+		for (int i = 0; i < argc; ++i)
+		{
+			kfree(kbuf[i]);
+		}
 		vfs_close(v);
 		return err;
 	}
@@ -217,6 +232,10 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	err = as_define_stack(curthread->t_addrspace, &stackptr);
 	if (err) {
 		/* thread_exit destroys curthread->t_addrspace */
+		for (int i = 0; i < argc; ++i)
+		{
+			kfree(kbuf[i]);
+		}
 		return err;
 	}
 
@@ -232,6 +251,10 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		char * dest = (char *)stackptr+(index+1)*4+prev_offset;
 		err = copyout(kbuf[l],(userptr_t)dest,(size_t)arg_length+1);
 		if (err) {
+			for (int i = 0; i < argc; ++i)
+			{
+				kfree(kbuf[i]);
+			}
 			return err;
 		}
 		for (int i = arg_length; i < arg_length+padding+1; ++i)
@@ -244,10 +267,17 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	ret_buf[argc] = NULL;
 	err = copyout(ret_buf,(userptr_t)stackptr, sizeof(ret_buf));
 	if (err) {
+		for (int i = 0; i < argc; ++i)
+		{
+			kfree(kbuf[i]);
+		}
 		return err;
 	}
 
-
+	for (int i = 0; i < argc; ++i)
+	{
+		kfree(kbuf[i]);
+	}
 	if (parent_as != NULL)
 	{
 		as_destroy(parent_as);
