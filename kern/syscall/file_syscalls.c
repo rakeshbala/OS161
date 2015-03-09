@@ -87,6 +87,11 @@ sys_open(userptr_t filename, int flags, int mode, int *fd)
 
 					/************ RB:Change this lock name later - Not nice ************/
 				file_fd->lock = lock_create(file_fd->name);
+				if (file_fd->lock == NULL)
+				{
+					kfree(file_fd);
+					return ENOMEM;
+				}
 				file_fd->offset = offset;
 				file_fd->ref_count = 1;
 				file_fd->vn = f_vnode;
@@ -210,6 +215,7 @@ int sys_close(int fd)
 	curthread->t_fdtable[fd] = NULL;
 	if(t_fdesc->ref_count == 0) {
 		vfs_close(t_fdesc->vn);
+		lock_release(t_fdesc->lock);
 		fdesc_destroy(t_fdesc);
 	}else{
 		lock_release(t_fdesc->lock);

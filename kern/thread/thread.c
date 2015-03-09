@@ -174,6 +174,10 @@ thread_create(const char *name)
 	if (process_lock == NULL)
 	{
 		process_lock = lock_create("process_lock");
+		if (process_lock == NULL)
+		{
+			return NULL;
+		}
 	}
 	for (int i = 1; i < PID_LIMIT; ++i)
 	{

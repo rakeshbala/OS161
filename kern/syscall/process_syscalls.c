@@ -247,7 +247,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		return err;
 	}
 
-	/************ RB:Pack the variables and dispatch them ************/
+	/************ RR:Pack the variables and dispatch them ************/
 	stackptr -= copylength;
 	int prev_offset = 0;
 	char* ret_buf[argc+1];
