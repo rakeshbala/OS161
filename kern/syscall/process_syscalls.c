@@ -24,6 +24,7 @@
 
 struct pdesc* g_pdtable[PID_LIMIT];
 void childfork_func(void * ptr, unsigned long data2);
+void cleanup_dirtyproc(struct addrspace * as, char **kbuf, int argc);
 
 void
 sys__exit(int exitcode)
@@ -154,13 +155,6 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		return err;
 	}
 
-
-	if (strcmp((char *)u_program,"") == 0)
-	{
-		return EISDIR;
-	}
-
-
 	char *uargs[MAX_ARG_NUM];
 	err = copyin(u_uargs,uargs,MAX_ARG_NUM);
 	if (err)
@@ -179,10 +173,8 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		}
 		err = copyin((const userptr_t) uargs[index], (char *)kbuf[index], (size_t)MAX_ARG_LENGTH);
 		if (err) {
-			for (int i = 0; i <= index; ++i)
-			{
-				kfree(kbuf[i]);
-			}
+
+			cleanup_dirtyproc(NULL, kbuf, index+1);
 			return err;
 		}
 		int arg_length = strlen(uargs[index]);
@@ -201,23 +193,22 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	strcpy(temp_progname,program);
 	err = vfs_open(temp_progname, O_RDONLY, 0, &v);
 	if (err) {
-		for (int i = 0; i < argc; ++i)
-		{
-			kfree(kbuf[i]);
-		}
+		cleanup_dirtyproc(NULL, kbuf, index+1);
 		return err;
 	}
 
+
 	/* Free . */
+	struct addrspace *parent_as;
 	if (curthread->t_addrspace != NULL)
 	{
-		as_destroy(curthread->t_addrspace);
+		parent_as = curthread->t_addrspace;
 	}
-
 
 	// /* Create a new address space. */
 	curthread->t_addrspace = as_create();
 	if (curthread->t_addrspace==NULL) {
+		cleanup_dirtyproc(NULL, kbuf, argc);
 		vfs_close(v);
 		return ENOMEM;
 	}
@@ -226,11 +217,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	/* Load the executable. */
 	err = load_elf(v, &entrypoint);
 	if (err) {
-		 // thread_exit destroys curthread->t_addrspace
-		for (int i = 0; i < argc; ++i)
-		{
-			kfree(kbuf[i]);
-		}
+		cleanup_dirtyproc(parent_as, kbuf, argc);
 		vfs_close(v);
 		return err;
 	}
@@ -239,11 +226,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	/* Define the user stack in the address space */
 	err = as_define_stack(curthread->t_addrspace, &stackptr);
 	if (err) {
-		/* thread_exit destroys curthread->t_addrspace */
-		for (int i = 0; i < argc; ++i)
-		{
-			kfree(kbuf[i]);
-		}
+		cleanup_dirtyproc(parent_as, kbuf, argc);
 		return err;
 	}
 
@@ -259,10 +242,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		char * dest = (char *)stackptr+(index+1)*4+prev_offset;
 		err = copyout(kbuf[l],(userptr_t)dest,(size_t)arg_length+1);
 		if (err) {
-			for (int i = 0; i < argc; ++i)
-			{
-				kfree(kbuf[i]);
-			}
+			cleanup_dirtyproc(parent_as, kbuf, argc);
 			return err;
 		}
 		for (int i = arg_length; i < arg_length+padding+1; ++i)
@@ -275,18 +255,11 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 	ret_buf[argc] = NULL;
 	err = copyout(ret_buf,(userptr_t)stackptr, sizeof(ret_buf));
 	if (err) {
-
-		for (int i = 0; i < argc; ++i)
-		{
-			kfree(kbuf[i]);
-		}
+		cleanup_dirtyproc(parent_as, kbuf, argc);
 		return err;
 	}
 
-	for (int i = 0; i < argc; ++i)
-	{
-		kfree(kbuf[i]);
-	}
+	cleanup_dirtyproc(parent_as, kbuf, argc);
 	enter_new_process(argc, (userptr_t)stackptr /*userspace addr of argv*/,
 			  stackptr, entrypoint);
 	/* enter_new_process does not return. */
@@ -302,4 +275,17 @@ void pdesc_destroy(struct pdesc * pd)
 	cv_destroy(pd->wait_cv);
 	lock_destroy(pd->wait_lock);
 	kfree(pd);
+}
+
+void cleanup_dirtyproc(struct addrspace * as, char **kbuf, int argc)
+{
+	if (as)
+	{
+		as_destroy(curthread->t_addrspace);
+		curthread->t_addrspace = as;
+	}
+	for (int i = 0; i < argc; ++i)
+	{
+		kfree(kbuf[i]);
+	}
 }
