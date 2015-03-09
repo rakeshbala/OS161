@@ -155,6 +155,12 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		return err;
 	}
 
+
+	if (strcmp(program,"") == 0)
+	{
+		return EISDIR;
+	}
+
 	char *uargs[MAX_ARG_NUM];
 	err = copyin(u_uargs,uargs,MAX_ARG_NUM);
 	if (err)
