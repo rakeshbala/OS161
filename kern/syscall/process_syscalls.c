@@ -259,7 +259,9 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 		return err;
 	}
 
-	cleanup_dirtyproc(parent_as, kbuf, argc);
+	cleanup_dirtyproc(NULL, kbuf, argc);
+	as_destroy(parent_as);
+
 	enter_new_process(argc, (userptr_t)stackptr /*userspace addr of argv*/,
 			  stackptr, entrypoint);
 	/* enter_new_process does not return. */
