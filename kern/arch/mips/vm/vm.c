@@ -116,7 +116,7 @@ alloc_kpages(int npages)
 
 	if (vm_is_bootstrapped == true)
 	{
-		// lock_acquire(coremap_lock);
+		lock_acquire(coremap_lock);
 		for (unsigned int i = 0; i < coremap_size; ++i)
 		{
 			if (coremap[i].p_state == PS_FREE)
@@ -135,12 +135,13 @@ alloc_kpages(int npages)
 					coremap[i].p_state = PS_FIXED;
 					coremap[i].chunk_size = npages;
 					paddr_t pa = i*PAGE_SIZE;
+					lock_release(coremap_lock);
 					return PADDR_TO_KVADDR(pa);
 				}
 			}
 
 		}
-		// lock_release(coremap_lock);
+		lock_release(coremap_lock);
 		return 0;
 
 	}else{
