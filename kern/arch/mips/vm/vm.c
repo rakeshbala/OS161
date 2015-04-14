@@ -65,18 +65,18 @@ vm_bootstrap(void)
 
 
 	/************ RB:Accomodate for last address misalignment ************/
-	paddr_t firstpaddr,lastpaddr;
-	ram_getsize(&firstpaddr,&lastpaddr);
-	paddr_t availLast = lastpaddr - (lastpaddr%PAGE_SIZE);
+	paddr_t fpaddr,lpaddr;
+	ram_getsize(&fpaddr,&lpaddr);
+	paddr_t availLast = lpaddr - (lpaddr%PAGE_SIZE);
 	coremap_size = availLast/PAGE_SIZE;
-	coremap = (struct coremap_entry *)PADDR_TO_KVADDR(firstpaddr);
-	KASSERT(coremap != NULL);
 	/************ RB:Accomodate for free address start misalignment ************/
-	paddr_t freeaddr = firstpaddr + (PAGE_SIZE - (firstpaddr%PAGE_SIZE));
-	freeaddr += coremap_size*sizeof(struct coremap_entry);
+	fpaddr = fpaddr + (PAGE_SIZE - (fpaddr%PAGE_SIZE));
+	coremap = (struct coremap_entry *)PADDR_TO_KVADDR(fpaddr);
+	KASSERT(coremap != NULL);
+	paddr_t freeaddr_start = fpaddr + coremap_size*sizeof(struct coremap_entry);
 
 	/************ RB:Mark fixed ************/
-	unsigned int fixedIndex = freeaddr/PAGE_SIZE;
+	unsigned int fixedIndex = freeaddr_start/PAGE_SIZE;
 	for (unsigned int i = 0; i <= availLast/PAGE_SIZE; ++i)
 	{
 		struct coremap_entry entry;
@@ -85,10 +85,10 @@ vm_bootstrap(void)
 			entry.p_state = PS_FIXED;
 		}else{
 			entry.p_state = PS_FREE;
-			entry.chunk_size = 1;
-			entry.va = 0;
-			entry.as = NULL;
 		}
+		entry.chunk_size = 1;
+		entry.va = 0;
+		entry.as = NULL;
 		coremap[i] = entry;
 
 	}
@@ -120,10 +120,29 @@ alloc_kpages(int npages)
 		{
 			if (coremap[i].p_state == PS_FREE)
 			{
-				paddr_t pa = i*PAGE_SIZE;
-				return PADDR_TO_KVADDR(pa);
-
+				lock_acquire(coremap_lock);
+				if (coremap[i].p_state == PS_FREE)
+				{
+					bool allFree = true;
+					for (int j = i+1; j < npages; ++j)
+					{
+						if (coremap[j].p_state != PS_FREE)
+						{
+							allFree = false;
+							break;
+						}
+					}
+					if (allFree)
+					{
+						coremap[i].p_state = PS_FIXED;
+						coremap[i].chunk_size = npages;
+						paddr_t pa = i*PAGE_SIZE;
+						return PADDR_TO_KVADDR(pa);
+					}
+				}
+				lock_release(coremap_lock);
 			}
+
 		}
 		return 0;
 
