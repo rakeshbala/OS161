@@ -369,6 +369,7 @@ file      syscall/runprogram.c
 file      syscall/time_syscalls.c
 file      syscall/file_syscalls.c
 file      syscall/process_syscalls.c
+file      arch/mips/vm/vm.c
 
 #
 # Startup and initialization

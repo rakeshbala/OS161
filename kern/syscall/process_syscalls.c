@@ -205,7 +205,7 @@ sys_execv(userptr_t u_program, userptr_t u_uargs)
 
 
 	/* Free . */
-	struct addrspace *parent_as;
+	struct addrspace *parent_as = NULL;
 	if (curthread->t_addrspace != NULL)
 	{
 		parent_as = curthread->t_addrspace;
