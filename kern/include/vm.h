@@ -39,6 +39,7 @@
 
 #include <machine/vm.h>
 #include <addrspace.h>
+#include <synch.h>
 
 /* Fault-type arguments to vm_fault() */
 #define VM_FAULT_READ        0    /* A read was attempted */
@@ -65,7 +66,7 @@ struct coremap_entry
 };
 
 struct coremap_entry *coremap;
-struct lock *coremap_lock;
+struct spinlock coremap_lock;
 bool vm_is_bootstrapped ;
 unsigned int coremap_size;
 

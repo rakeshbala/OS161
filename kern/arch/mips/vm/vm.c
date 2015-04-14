@@ -57,13 +57,7 @@ void
 vm_bootstrap(void)
 {
 
-	coremap_lock = lock_create("Coremap_Lock");
-	if (coremap_lock == NULL)
-	{
-		panic("Coremap lock creation failed");
-	}
-
-
+	spinlock_init(&coremap_lock);
 	/************ RB:Accomodate for last address misalignment ************/
 	paddr_t fpaddr,lpaddr;
 	ram_getsize(&fpaddr,&lpaddr);
@@ -116,7 +110,7 @@ alloc_kpages(int npages)
 
 	if (vm_is_bootstrapped == true)
 	{
-		lock_acquire(coremap_lock);
+		spinlock_acquire(&coremap_lock);
 		for (unsigned int i = 0; i < coremap_size; ++i)
 		{
 			if (coremap[i].p_state == PS_FREE)
@@ -135,13 +129,13 @@ alloc_kpages(int npages)
 					coremap[i].p_state = PS_FIXED;
 					coremap[i].chunk_size = npages;
 					paddr_t pa = i*PAGE_SIZE;
-					lock_release(coremap_lock);
+					spinlock_release(&coremap_lock);
 					return PADDR_TO_KVADDR(pa);
 				}
 			}
 
 		}
-		lock_release(coremap_lock);
+		spinlock_release(&coremap_lock);
 		return 0;
 
 	}else{
@@ -162,7 +156,7 @@ free_kpages(vaddr_t addr)
 	{
 		paddr_t pa = KVADDR_TO_PADDR(addr);
 		int core_index = pa/PAGE_SIZE;
-		lock_acquire(coremap_lock);
+		spinlock_acquire(&coremap_lock);
 		struct coremap_entry entry = coremap[core_index];
 		int j = entry.chunk_size;
 		for (int i = 0; i < j; ++i)
@@ -172,7 +166,7 @@ free_kpages(vaddr_t addr)
 			entry.p_state = PS_FREE;
 			coremap[core_index+i] = entry;
 		}
-		lock_release(coremap_lock);
+		spinlock_release(&coremap_lock);
 	}
 }
 
