@@ -37,7 +37,7 @@
 #include <mips/tlb.h>
 #include <addrspace.h>
 #include <vm.h>
-
+#include <synch.h>
 /*
  * Dumb MIPS-only "VM system" that is intended to only be just barely
  * enough to struggle off the ground. You should replace all of this
@@ -56,7 +56,43 @@ static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 void
 vm_bootstrap(void)
 {
-	/* Do nothing. */
+
+	coremap_lock = lock_create("Coremap_Lock");
+	if (coremap_lock == NULL)
+	{
+		panic("Coremap lock creation failed");
+	}
+
+
+	/************ RB:Accomodate for last address misalignment ************/
+	paddr_t firstpaddr,lastpaddr;
+	ram_getsize(&firstpaddr,&lastpaddr);
+	paddr_t availLast = lastpaddr - (lastpaddr%PAGE_SIZE);
+	coremap_size = availLast/PAGE_SIZE;
+	coremap = (struct coremap_entry *)PADDR_TO_KVADDR(firstpaddr);
+	KASSERT(coremap != NULL);
+	/************ RB:Accomodate for free address start misalignment ************/
+	paddr_t freeaddr = firstpaddr + (PAGE_SIZE - (firstpaddr%PAGE_SIZE));
+	freeaddr += coremap_size*sizeof(struct coremap_entry);
+
+	/************ RB:Mark fixed ************/
+	unsigned int fixedIndex = freeaddr/PAGE_SIZE;
+	for (unsigned int i = 0; i <= availLast/PAGE_SIZE; ++i)
+	{
+		struct coremap_entry entry;
+		if (i <=fixedIndex)
+		{
+			entry.p_state = PS_FIXED;
+		}else{
+			entry.p_state = PS_FREE;
+			entry.chunk_size = 1;
+			entry.va = 0;
+			entry.as = NULL;
+		}
+		coremap[i] = entry;
+
+	}
+	vm_is_bootstrapped = true;
 }
 
 static
@@ -77,12 +113,29 @@ getppages(unsigned long npages)
 vaddr_t
 alloc_kpages(int npages)
 {
-	paddr_t pa;
-	pa = getppages(npages);
-	if (pa==0) {
+
+	if (vm_is_bootstrapped == true)
+	{
+		for (unsigned int i = 0; i <= coremap_size; ++i)
+		{
+			if (coremap[i].p_state == PS_FREE)
+			{
+				paddr_t pa = i*PAGE_SIZE;
+				return PADDR_TO_KVADDR(pa);
+
+			}
+		}
 		return 0;
+
+	}else{
+		paddr_t pa;
+		pa = getppages(npages);
+		if (pa==0) {
+			return 0;
+		}
+		return PADDR_TO_KVADDR(pa);
 	}
-	return PADDR_TO_KVADDR(pa);
+
 }
 
 void

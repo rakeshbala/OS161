@@ -38,11 +38,38 @@
 
 
 #include <machine/vm.h>
+#include <addrspace.h>
 
 /* Fault-type arguments to vm_fault() */
 #define VM_FAULT_READ        0    /* A read was attempted */
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
+
+
+/************ RB:Coremap Declarations ************/
+typedef enum {
+	PS_FREE,
+	PS_FIXED,
+	PS_CLEAN,
+	PS_DIRTY
+} page_state;
+
+
+struct coremap_entry
+{
+	page_state p_state;
+	int chunk_size;
+
+	struct addrspace *as;
+	vaddr_t va;
+};
+
+struct coremap_entry *coremap;
+struct lock *coremap_lock;
+bool vm_is_bootstrapped ;
+unsigned int coremap_size;
+
+
 
 
 /* Initialization function */
