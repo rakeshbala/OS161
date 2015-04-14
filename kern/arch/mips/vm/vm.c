@@ -160,9 +160,22 @@ alloc_kpages(int npages)
 void
 free_kpages(vaddr_t addr)
 {
-	/* nothing - leak the memory. */
-
-	(void)addr;
+	if (vm_is_bootstrapped == true)
+	{
+		paddr_t pa = KVADDR_TO_PADDR(addr);
+		int core_index = pa/PAGE_SIZE;
+		lock_acquire(coremap_lock);
+		struct coremap_entry entry = coremap[core_index];
+		int j = entry.chunk_size;
+		for (int i = 0; i < j; ++i)
+		{
+			entry = coremap[core_index+i];
+			entry.chunk_size = -1;
+			entry.p_state = PS_FREE;
+			coremap[core_index+i] = entry;
+		}
+		lock_release(coremap_lock);
+	}
 }
 
 void

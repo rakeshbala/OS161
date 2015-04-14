@@ -67,7 +67,7 @@
  */
 #define PADDR_TO_KVADDR(paddr) ((paddr)+MIPS_KSEG0)
 
-/************ RB:Rever macro ************/
+/************ RB:Reverse macro ************/
  #define KVADDR_TO_PADDR(kvaddr)((kvaddr)-MIPS_KSEG0)
 
 /*
