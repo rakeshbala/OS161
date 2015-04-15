@@ -123,9 +123,6 @@ int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		 int readable, int writeable, int executable)
 {
-	/*
-	 * Write this.
-	 */
 
 	size_t npages;
 
@@ -147,18 +144,10 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 			return ENOMEM;
 		}
 
-		if (readable)
-		{
-			entry->permission = entry->permission|AX_READ;
-		}
-		if (writeable)
-		{
-			entry->permission = entry->permission|AX_WRITE;
-		}
-		if (executable)
-		{
-			entry->permission = entry->permission|AX_EXECUTE;
-		}
+		if (readable) entry->permission = entry->permission|AX_READ;
+		if (writeable) entry->permission = entry->permission|AX_WRITE;
+		if (executable) entry->permission = entry->permission|AX_EXECUTE;
+
 	}
 
 	struct region_entry * region = addRegion(as->regions, vaddr,sz,readable,
@@ -177,9 +166,6 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 int
 as_prepare_load(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
 
 	(void)as;
 	return 0;
@@ -188,9 +174,6 @@ as_prepare_load(struct addrspace *as)
 int
 as_complete_load(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
 
 	(void)as;
 	return 0;
@@ -199,10 +182,6 @@ as_complete_load(struct addrspace *as)
 int
 as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 {
-	/*
-	 * Write this.
-	 */
-
 	(void)as;
 
 	/* Initial user-level stack pointer */
@@ -211,6 +190,18 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	return 0;
 }
 
+void
+as_check_regions(struct addrspace *as)
+{
+	KASSERT(as->regions != NULL);
+	struct region_entry *temp_region = as->regions;
+	while(temp_region != NULL){
+		KASSERT(temp_region->reg_base != 0);
+		KASSERT(temp_region->bounds != 0);
+		KASSERT(temp_region = temp_region->next);
+	}
+
+}
 
 /************ RB:Add page table entry to the page table ************/
 struct page_table_entry *
