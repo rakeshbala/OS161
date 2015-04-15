@@ -48,9 +48,17 @@ struct vnode;
  * You write this.
  */
 
+typedef enum {
+  AX_READ = 1,
+  AX_WRITE = 2,
+  AX_EXECUTE = 4
+} ax_permssion;
+
 struct page_table_entry{
   vaddr_t vaddr;
   paddr_t paddr;
+  ax_permssion permission;
+  bool on_disk;
   struct page_table_entry * next;
 };
 
@@ -83,13 +91,13 @@ struct addrspace {
 
         vaddr_t stack_end;
 
-        // vaddr_t as_vbase1;
-        // paddr_t as_pbase1;
-        // size_t as_npages1;
-        // vaddr_t as_vbase2;
-        // paddr_t as_pbase2;
-        // size_t as_npages2;
-        // paddr_t as_stackpbase;
+        vaddr_t as_vbase1;
+        paddr_t as_pbase1;
+        size_t as_npages1;
+        vaddr_t as_vbase2;
+        paddr_t as_pbase2;
+        size_t as_npages2;
+        paddr_t as_stackpbase;
 #endif
 };
 
@@ -152,10 +160,10 @@ int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
 int load_elf(struct vnode *v, vaddr_t *entrypoint);
 
 /************ RB:Page table and region linked list functions ************/
-struct page_table_entry *addPTE(vaddr_t vaddr, paddr_t paddr);
-struct page_table_entry *getPTE(vaddr_t vaddr);
+struct page_table_entry *addPTE(struct page_table_entry* page_table, vaddr_t vaddr, paddr_t paddr);
+struct page_table_entry *getPTE(struct page_table_entry* page_table, vaddr_t vaddr);
 
-struct region_entry *addRegion(vaddr_t rbase,size_t sz,int r,int w,int x);
-struct region_entry *getRegion(vaddr_t vaddr);
+struct region_entry *addRegion(struct region_entry* regions, vaddr_t rbase,size_t sz,int r,int w,int x);
+struct region_entry *getRegion(struct region_entry* regions, vaddr_t vaddr);
 
 #endif /* _ADDRSPACE_H_ */

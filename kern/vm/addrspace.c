@@ -30,9 +30,13 @@
 #include <types.h>
 #include <kern/errno.h>
 #include <lib.h>
+#include <spl.h>
+#include <spinlock.h>
+#include <thread.h>
+#include <current.h>
+#include <mips/tlb.h>
 #include <addrspace.h>
 #include <vm.h>
-
 // /*
 //  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
 //  * assignment, this file is not compiled or linked or in any way
@@ -49,9 +53,11 @@ as_create(void)
 		return NULL;
 	}
 
-	/*
-	 * Initialize as needed.
-	 */
+	as->heap_start = 0;
+	as->heap_end = 0;
+	as->regions = NULL;
+	as->stack_end = USERSTACK;
+	as->page_table = NULL;
 
 	return as;
 }
@@ -89,11 +95,18 @@ as_destroy(struct addrspace *as)
 void
 as_activate(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
+	int i, spl;
 
-	(void)as;  // suppress warning until code gets written
+	(void)as;
+
+	/* Disable interrupts on this CPU while frobbing the TLB. */
+	spl = splhigh();
+
+	for (i=0; i<NUM_TLB; i++) {
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+
+	splx(spl);
 }
 
 
@@ -114,13 +127,51 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	 * Write this.
 	 */
 
-	(void)as;
-	(void)vaddr;
-	(void)sz;
-	(void)readable;
-	(void)writeable;
-	(void)executable;
-	return EUNIMP;
+	size_t npages;
+
+	/* Align the region. First, the base... */
+	sz += vaddr & ~(vaddr_t)PAGE_FRAME;
+	vaddr &= PAGE_FRAME;
+
+	/* ...and now the length. */
+	sz = (sz + PAGE_SIZE - 1) & PAGE_FRAME;
+
+	npages = sz / PAGE_SIZE;
+
+	for (size_t i = 0; i < npages; ++i)
+	{
+		struct page_table_entry *entry = addPTE(as->page_table,
+			vaddr+i*PAGE_SIZE, 0);
+		if (entry == NULL)
+		{
+			return ENOMEM;
+		}
+
+		if (readable)
+		{
+			entry->permission = entry->permission|AX_READ;
+		}
+		if (writeable)
+		{
+			entry->permission = entry->permission|AX_WRITE;
+		}
+		if (executable)
+		{
+			entry->permission = entry->permission|AX_EXECUTE;
+		}
+	}
+
+	struct region_entry * region = addRegion(as->regions, vaddr,sz,readable,
+		writeable,executable);
+	if (region == NULL)
+	{
+		return ENOMEM;
+	}
+	as->heap_start = vaddr + sz;
+	as->heap_start += (PAGE_SIZE - (as->heap_start % PAGE_SIZE));
+	as->heap_end = as->heap_start;
+
+	return 0;
 }
 
 int
@@ -160,3 +211,84 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	return 0;
 }
 
+
+/************ RB:Add page table entry to the page table ************/
+struct page_table_entry *
+addPTE(struct page_table_entry* page_table, vaddr_t vaddr, paddr_t paddr)
+{
+	struct page_table_entry *new_entry = page_table;
+	while(new_entry != NULL){
+		new_entry = new_entry->next;
+	}
+	new_entry = kmalloc(sizeof(struct page_table_entry));
+	if (new_entry == NULL)
+	{
+		return NULL;
+	}
+	new_entry->vaddr = vaddr;
+	new_entry->paddr = paddr;
+	new_entry->on_disk = false;
+	new_entry->next = NULL;
+	new_entry->permission = 0;
+	return new_entry;
+}
+
+/************ RB:Get page table entry based on passed in vaddr ************/
+struct page_table_entry *
+getPTE(struct page_table_entry* page_table, vaddr_t vaddr)
+{
+	KASSERT(page_table != NULL);
+	struct page_table_entry *new_entry = page_table;
+	bool found = false;
+	vaddr_t search_page = vaddr & PAGE_FRAME;
+
+	while(new_entry->next != NULL){
+		if (search_page == new_entry->vaddr)
+		{
+			found = true;
+			break;
+		}
+		new_entry = new_entry->next;
+	}
+	return found?new_entry:NULL;
+
+
+}
+
+/************ RB:Add region to the regions linked list ************/
+struct region_entry *addRegion(struct region_entry* regions, vaddr_t rbase,size_t sz,int r,int w,int x){
+	struct region_entry *new_entry = regions;
+	while(new_entry != NULL){
+		new_entry = new_entry->next;
+	}
+
+	new_entry = kmalloc(sizeof(struct region_entry));
+	if (new_entry == NULL)
+	{
+		return NULL;
+	}
+	new_entry->next = NULL;
+	new_entry->reg_base = rbase;
+	new_entry->bounds = sz;
+	new_entry->readable = r;
+	new_entry->writable = w;
+	new_entry->executable = x;
+	return new_entry;
+}
+
+/************ RB:Get region based on passed in vaddr ************/
+struct region_entry *getRegion(struct region_entry* regions, vaddr_t vaddr){
+	KASSERT(regions != NULL);
+	struct region_entry *new_entry = regions;
+	bool found = false;
+
+	while(new_entry->next != NULL){
+		if (vaddr > new_entry->reg_base && vaddr < new_entry->reg_base+new_entry->bounds)
+		{
+			found = true;
+			break;
+		}
+		new_entry = new_entry->next;
+	}
+	return found?new_entry:NULL;
+}
