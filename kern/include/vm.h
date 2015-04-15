@@ -69,6 +69,7 @@ struct coremap_entry *coremap;
 struct spinlock coremap_lock;
 bool vm_is_bootstrapped ;
 unsigned int coremap_size;
+unsigned int search_start;
 
 
 

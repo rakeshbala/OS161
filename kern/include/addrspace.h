@@ -48,6 +48,21 @@ struct vnode;
  * You write this.
  */
 
+struct page_table_entry{
+  vaddr_t vaddr;
+  paddr_t paddr;
+  struct page_table_entry * next;
+};
+
+struct region_entry{
+  vaddr_t reg_base;
+  size_t bounds;
+  int readable;
+  int writable;
+  int executable;
+  struct region_entry *next;
+};
+
 struct addrspace {
 #if OPT_DUMBVM
         vaddr_t as_vbase1;
@@ -59,13 +74,22 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         /* Put stuff here for your VM system */
-        vaddr_t as_vbase1;
-        paddr_t as_pbase1;
-        size_t as_npages1;
-        vaddr_t as_vbase2;
-        paddr_t as_pbase2;
-        size_t as_npages2;
-        paddr_t as_stackpbase;
+
+        struct page_table_entry *page_table;
+        struct region_entry* regions;
+
+        vaddr_t heap_start;
+        vaddr_t heap_end;
+
+        vaddr_t stack_end;
+
+        // vaddr_t as_vbase1;
+        // paddr_t as_pbase1;
+        // size_t as_npages1;
+        // vaddr_t as_vbase2;
+        // paddr_t as_pbase2;
+        // size_t as_npages2;
+        // paddr_t as_stackpbase;
 #endif
 };
 
@@ -127,5 +151,11 @@ int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
 
 int load_elf(struct vnode *v, vaddr_t *entrypoint);
 
+/************ RB:Page table and region linked list functions ************/
+struct page_table_entry *addPTE(vaddr_t vaddr, paddr_t paddr);
+struct page_table_entry *getPTE(vaddr_t vaddr);
+
+struct region_entry *addRegion(vaddr_t rbase,size_t sz,int r,int w,int x);
+struct region_entry *getRegion(vaddr_t vaddr);
 
 #endif /* _ADDRSPACE_H_ */
