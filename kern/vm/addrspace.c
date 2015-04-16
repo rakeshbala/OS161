@@ -88,7 +88,20 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
+	if (as != NULL)
+	{
+		while(as->page_table != NULL){
+			struct page_table_entry *temp_page_t = as->page_table;
+			as->page_table = as->page_table->next;
+			kfree(temp_page_t);
+		}
 
+		while(as->regions != NULL){
+			struct region_entry *temp_region = as->regions;
+			as->regions = as->regions->next;
+			kfree(temp_region);
+		}
+	}
 	kfree(as);
 }
 
@@ -105,9 +118,9 @@ as_activate(struct addrspace *as)
 	for (i=0; i<NUM_TLB; i++) {
 		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
-
 	splx(spl);
 }
+
 
 
  // * Set up a segment at virtual address VADDR of size MEMSIZE. The
@@ -166,8 +179,17 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 int
 as_prepare_load(struct addrspace *as)
 {
+	KASSERT(as != NULL);
+	KASSERT(as->regions != NULL);
 
-	(void)as;
+	/************ RB:Loop through all regions to make them read write ************/
+	/************ RB:Only for loadelf. Will change this back in as_complete_load ************/
+	struct region_entry *temp_region = as->regions;
+	while(temp_region != NULL){
+		int rw_perm = AX_READ|AX_WRITE;
+		temp_region->original_perm = rw_perm;
+		temp_region = temp_region->next;
+	}
 	return 0;
 }
 
@@ -175,7 +197,15 @@ int
 as_complete_load(struct addrspace *as)
 {
 
-	(void)as;
+	KASSERT(as != NULL);
+	KASSERT(as->regions != NULL);
+
+	/************ RB:Loop through all regions to set back original permissions ************/
+	struct region_entry *temp_region = as->regions;
+	while(temp_region != NULL){
+		temp_region->original_perm = temp_region->backup_perm;
+		temp_region = temp_region->next;
+	}
 	return 0;
 }
 
@@ -190,6 +220,8 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	return 0;
 }
 
+
+/************ RB:Sanity checks for address space ************/
 void
 as_check_regions(struct addrspace *as)
 {
@@ -200,7 +232,9 @@ as_check_regions(struct addrspace *as)
 		KASSERT(temp_region->bounds != 0);
 		KASSERT(temp_region = temp_region->next);
 	}
-
+	KASSERT(as->heap_start != 0);
+	KASSERT(as->heap_end != 0);
+	KASSERT (as->stack_end != 0);
 }
 
 /************ RB:Add page table entry to the page table ************/
@@ -261,9 +295,11 @@ struct region_entry *addRegion(struct region_entry* regions, vaddr_t rbase,size_
 	new_entry->next = NULL;
 	new_entry->reg_base = rbase;
 	new_entry->bounds = sz;
-	new_entry->readable = r;
-	new_entry->writable = w;
-	new_entry->executable = x;
+	new_entry->original_perm = 0;
+	if (r) new_entry->original_perm = new_entry->original_perm|AX_READ;
+	if (w) new_entry->original_perm = new_entry->original_perm|AX_WRITE;
+	if (x) new_entry->original_perm = new_entry->original_perm|AX_EXECUTE;
+	new_entry->backup_perm = original_perm;
 	return new_entry;
 }
 
