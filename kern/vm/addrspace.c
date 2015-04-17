@@ -150,7 +150,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 
 	for (size_t i = 0; i < npages; ++i)
 	{
-		struct page_table_entry *entry = addPTE(as->page_table,
+		struct page_table_entry *entry = addPTE(as,
 			vaddr+i*PAGE_SIZE, 0);
 		if (entry == NULL)
 		{
@@ -163,7 +163,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 
 	}
 
-	struct region_entry * region = addRegion(as->regions, vaddr,sz,readable,
+	struct region_entry * region = addRegion(as, vaddr,sz,readable,
 		writeable,executable);
 	if (region == NULL)
 	{
@@ -230,22 +230,55 @@ as_check_regions(struct addrspace *as)
 	while(temp_region != NULL){
 		KASSERT(temp_region->reg_base != 0);
 		KASSERT(temp_region->bounds != 0);
-		KASSERT(temp_region = temp_region->next);
+		temp_region = temp_region->next;
 	}
 	KASSERT(as->heap_start != 0);
 	KASSERT(as->heap_end != 0);
 	KASSERT (as->stack_end != 0);
 }
 
+int page_alloc(struct page_table_entry *pte){
+	KASSERT(pte != NULL);
+	for (unsigned int i = search_start; i < coremap_size; ++i)
+	{
+		spinlock_acquire(&coremap_lock);
+		struct coremap_entry entry = coremap[i];
+		if (entry.p_state == PS_FREE)
+		{
+			entry.p_state = PS_DIRTY;
+			entry.chunk_size = 1;
+			entry.va = pte->vaddr;
+			entry.as = curthread->t_addrspace;
+			coremap[i] = entry;
+			spinlock_release(&coremap_lock);
+			pte->paddr = i*PAGE_SIZE;
+			return 0;
+		}
+		spinlock_release(&coremap_lock);
+
+	}
+	return ENOMEM;
+}
+
+void page_free(vaddr_t vaddr){
+	struct page_table_entry *pte = getPTE(curthread->t_addrspace->page_table, vaddr);
+	KASSERT(pte != NULL);
+	int core_index = pte->paddr/PAGE_SIZE;
+	pte->paddr = NULL;
+	spinlock_acquire(&coremap_lock);
+	coremap[core_index].chunk_size = -1;
+	coremap[core_index].p_state = PS_FREE;
+	spinlock_release(&coremap_lock);
+}
+
+
 /************ RB:Add page table entry to the page table ************/
 struct page_table_entry *
-addPTE(struct page_table_entry* page_table, vaddr_t vaddr, paddr_t paddr)
+addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 {
-	struct page_table_entry *new_entry = page_table;
-	while(new_entry != NULL){
-		new_entry = new_entry->next;
-	}
-	new_entry = kmalloc(sizeof(struct page_table_entry));
+
+
+	struct page_table_entry *new_entry = kmalloc(sizeof(struct page_table_entry));
 	if (new_entry == NULL)
 	{
 		return NULL;
@@ -255,39 +288,46 @@ addPTE(struct page_table_entry* page_table, vaddr_t vaddr, paddr_t paddr)
 	new_entry->on_disk = false;
 	new_entry->next = NULL;
 	new_entry->permission = 0;
+
+	if (as->page_table == NULL)
+	{
+		as->page_table = new_entry;
+	}else{
+		struct page_table_entry *temp = as->page_table;
+		while(temp->next != NULL){
+			temp = temp->next;
+		}
+		temp->next = new_entry;
+	}
+
+
 	return new_entry;
 }
 
-/************ RB:Get page table entry based on passed in vaddr ************/
+/************ RB: Get page table entry based on passed in vaddr ************/
 struct page_table_entry *
 getPTE(struct page_table_entry* page_table, vaddr_t vaddr)
 {
 	KASSERT(page_table != NULL);
-	struct page_table_entry *new_entry = page_table;
+	struct page_table_entry *navig_entry = page_table;
 	bool found = false;
 	vaddr_t search_page = vaddr & PAGE_FRAME;
 
-	while(new_entry->next != NULL){
-		if (search_page == new_entry->vaddr)
+	while(navig_entry->next != NULL){
+		if (search_page == navig_entry->vaddr)
 		{
 			found = true;
 			break;
 		}
-		new_entry = new_entry->next;
+		navig_entry = navig_entry->next;
 	}
-	return found?new_entry:NULL;
-
-
+	return found?navig_entry:NULL;
 }
 
-/************ RB:Add region to the regions linked list ************/
-struct region_entry *addRegion(struct region_entry* regions, vaddr_t rbase,size_t sz,int r,int w,int x){
-	struct region_entry *new_entry = regions;
-	while(new_entry != NULL){
-		new_entry = new_entry->next;
-	}
-
-	new_entry = kmalloc(sizeof(struct region_entry));
+/************ RB: Add region to the regions linked list ************/
+struct region_entry * addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x)
+{
+	struct region_entry *new_entry = kmalloc(sizeof(struct region_entry));;
 	if (new_entry == NULL)
 	{
 		return NULL;
@@ -299,16 +339,27 @@ struct region_entry *addRegion(struct region_entry* regions, vaddr_t rbase,size_
 	if (r) new_entry->original_perm = new_entry->original_perm|AX_READ;
 	if (w) new_entry->original_perm = new_entry->original_perm|AX_WRITE;
 	if (x) new_entry->original_perm = new_entry->original_perm|AX_EXECUTE;
-	new_entry->backup_perm = original_perm;
+	new_entry->backup_perm = new_entry->original_perm;
+
+	if (as->regions == NULL)
+	{
+		as->regions = new_entry;
+	}else{
+		struct region_entry *temp = as->regions;
+		while(temp->next != NULL){
+			temp = temp->next;
+		}
+		temp->next = new_entry;
+	}
 	return new_entry;
 }
 
-/************ RB:Get region based on passed in vaddr ************/
-struct region_entry *getRegion(struct region_entry* regions, vaddr_t vaddr){
+/************ RB: Get region based on passed in vaddr ************/
+struct region_entry * getRegion(struct region_entry* regions, vaddr_t vaddr)
+{
 	KASSERT(regions != NULL);
 	struct region_entry *new_entry = regions;
 	bool found = false;
-
 	while(new_entry->next != NULL){
 		if (vaddr > new_entry->reg_base && vaddr < new_entry->reg_base+new_entry->bounds)
 		{

@@ -160,11 +160,15 @@ void as_check_regions(struct addrspace *as);
 
 int load_elf(struct vnode *v, vaddr_t *entrypoint);
 
+/************ RB:User page allocation methods ************/
+int page_alloc (struct page_table_entry* pte);
+void page_free(vaddr_t vaddr);
+
 /************ RB:Page table and region linked list functions ************/
-struct page_table_entry *addPTE(struct page_table_entry* page_table, vaddr_t vaddr, paddr_t paddr);
+struct page_table_entry *addPTE(struct addrspace* as, vaddr_t vaddr, paddr_t paddr);
 struct page_table_entry *getPTE(struct page_table_entry* page_table, vaddr_t vaddr);
 
-struct region_entry *addRegion(struct region_entry* regions, vaddr_t rbase,size_t sz,int r,int w,int x);
+struct region_entry *addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x);
 struct region_entry *getRegion(struct region_entry* regions, vaddr_t vaddr);
 
 #endif /* _ADDRSPACE_H_ */

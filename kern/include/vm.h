@@ -33,12 +33,11 @@
 /*
  * VM system-related definitions.
  *
- * You'll probably want to add stuff here.
  */
 
 
-#include <machine/vm.h>
 #include <addrspace.h>
+#include <machine/vm.h>
 #include <synch.h>
 
 /* Fault-type arguments to vm_fault() */
@@ -87,6 +86,5 @@ void free_kpages(vaddr_t addr);
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
-
 
 #endif /* _VM_H_ */
