@@ -29,14 +29,25 @@
 
 #include <unistd.h>
 #include <stdlib.h>
-
+#include <stdio.h>
 /*
  * true - succeed.
  */
+void justAnotherFn(void);
 
 int
 main()
 {
 	/* Just exit with success. */
+	printf("Test\n");
+	// char c = '\n';
+	// write(STDOUT_FILENO,&c,1);
 	exit(0);
+}
+
+void justAnotherFn(){
+	volatile int a = 6;
+	volatile int b =12;
+	volatile int c = a+b;
+	(void)c;
 }

@@ -194,20 +194,20 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 
 	npages = sz / PAGE_SIZE;
 
-	for (size_t i = 0; i < npages; ++i)
-	{
-		struct page_table_entry *entry = addPTE(as,
-			vaddr+i*PAGE_SIZE, 0);
-		if (entry == NULL)
-		{
-			return ENOMEM;
-		}
+	// for (size_t i = 0; i < npages; ++i)
+	// {
+	// 	struct page_table_entry *entry = addPTE(as,
+	// 		vaddr+i*PAGE_SIZE, 0);
+	// 	if (entry == NULL)
+	// 	{
+	// 		return ENOMEM;
+	// 	}
 
-		if (readable) entry->permission = entry->permission|AX_READ;
-		if (writeable) entry->permission = entry->permission|AX_WRITE;
-		if (executable) entry->permission = entry->permission|AX_EXECUTE;
+	// 	if (readable) entry->permission = entry->permission|AX_READ;
+	// 	if (writeable) entry->permission = entry->permission|AX_WRITE;
+	// 	if (executable) entry->permission = entry->permission|AX_EXECUTE;
 
-	}
+	// }
 
 	struct region_entry * region = addRegion(as, vaddr,sz,readable,
 		writeable,executable);
@@ -325,13 +325,13 @@ struct page_table_entry *
 addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 {
 
-
+	KASSERT(as != NULL);
 	struct page_table_entry *new_entry = kmalloc(sizeof(struct page_table_entry));
 	if (new_entry == NULL)
 	{
 		return NULL;
 	}
-	new_entry->vaddr = vaddr;
+	new_entry->vaddr = vaddr & PAGE_FRAME;
 	new_entry->paddr = paddr;
 	new_entry->on_disk = false;
 	new_entry->next = NULL;
@@ -356,12 +356,11 @@ addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 struct page_table_entry *
 getPTE(struct page_table_entry* page_table, vaddr_t vaddr)
 {
-	KASSERT(page_table != NULL);
 	struct page_table_entry *navig_entry = page_table;
 	bool found = false;
 	vaddr_t search_page = vaddr & PAGE_FRAME;
 
-	while(navig_entry->next != NULL){
+	while(navig_entry != NULL){
 		if (search_page == navig_entry->vaddr)
 		{
 			found = true;

@@ -185,7 +185,6 @@ int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
 
-	paddr_t paddr;
 	uint32_t ehi, elo;
 	struct addrspace *as;
 	int spl;
@@ -239,18 +238,18 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 
 	/* make sure it's page-aligned */
-	KASSERT((paddr & PAGE_FRAME) == paddr);
+	KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
 
 	/* Disable interrupts on this CPU while frobbing the TLB. */
 	spl = splhigh();
 	ehi = faultaddress;
 	if ((region_perm & AX_WRITE) == AX_WRITE)
 	{
-		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
+		elo = pte->paddr | TLBLO_DIRTY | TLBLO_VALID;
 	}else{
-		elo = paddr|TLBLO_VALID;
+		elo = pte->paddr|TLBLO_VALID;
 	}
-	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, paddr);
+	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
 	tlb_random(ehi, elo);
 	splx(spl);
 	return 0;
