@@ -159,7 +159,7 @@ int load_elf(struct vnode *v, vaddr_t *entrypoint);
 
 /************ RB:User page allocation methods ************/
 int page_alloc (struct page_table_entry* pte);
-void page_free(vaddr_t vaddr);
+void page_free(struct page_table_entry *pte);
 
 /************ RB:Page table and region linked list functions ************/
 struct page_table_entry *addPTE(struct addrspace* as, vaddr_t vaddr, paddr_t paddr);

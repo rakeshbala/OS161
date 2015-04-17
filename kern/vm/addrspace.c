@@ -42,6 +42,9 @@
 //  * assignment, this file is not compiled or linked or in any way
 //  * used. The cheesy hack versions in dumbvm.c are used instead.
 //  */
+//
+int copy_page_table(struct page_table_entry *oldpt, struct page_table_entry *newpt);
+void copy_regions(struct region_entry *old_regions, struct region_entry *new_region);
 
 struct addrspace *
 as_create(void)
@@ -71,33 +74,39 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	if (newas==NULL) {
 		return ENOMEM;
 	}
-	copy_page_table(old->page_table, newas->page_table);
+	int result = copy_page_table(old->page_table, newas->page_table);
+	if (result != 0)
+	{
+		return ENOMEM;
+	}
 	copy_regions(old->regions, newas->regions);
 	newas->heap_start = old->heap_start;
 	newas->heap_end = old->heap_end;
 	newas->stack_end = old->stack_end;
-	/************ RB:Allocate and copy pages ************/
-	struct page_table_entry *temp = newas->page_table;
-	while(newas->next != NULL)
-
-
-
 	*ret = newas;
 	return 0;
 }
 
-void
+int
 copy_page_table(struct page_table_entry *oldpt, struct page_table_entry *newpt)
 {
 	if (oldpt->next == NULL)
 	{
-		return;
+		return 0;
 	}else{
 		newpt = kmalloc(sizeof(struct page_table_entry));
-		newpt->vaddr = oldpt->paddr;
+		newpt->vaddr = oldpt->vaddr;
+		int result = page_alloc(newpt);
+		if (result != 0)
+		{
+			return ENOMEM;
+		}
+		memmove((void *)PADDR_TO_KVADDR(oldpt->paddr),
+			(const void *)PADDR_TO_KVADDR(newpt->paddr),PAGE_SIZE);
 		newpt->permission = oldpt->permission;
 		newpt->on_disk = oldpt->on_disk;
 		copy_page_table(oldpt->next,newpt->next);
+		return 0;
 	}
 }
 
@@ -128,6 +137,7 @@ as_destroy(struct addrspace *as)
 	{
 		while(as->page_table != NULL){
 			struct page_table_entry *temp_page_t = as->page_table;
+			page_free(temp_page_t);
 			as->page_table = as->page_table->next;
 			kfree(temp_page_t);
 		}
@@ -252,7 +262,6 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
-
 	return 0;
 }
 
@@ -296,15 +305,18 @@ int page_alloc(struct page_table_entry *pte){
 	return ENOMEM;
 }
 
-void page_free(vaddr_t vaddr){
-	struct page_table_entry *pte = getPTE(curthread->t_addrspace->page_table, vaddr);
+void page_free(struct page_table_entry *pte){
 	KASSERT(pte != NULL);
-	int core_index = pte->paddr/PAGE_SIZE;
-	pte->paddr = (vaddr_t)NULL;
-	spinlock_acquire(&coremap_lock);
-	coremap[core_index].chunk_size = -1;
-	coremap[core_index].p_state = PS_FREE;
-	spinlock_release(&coremap_lock);
+	if (pte->paddr != 0)
+	{
+		int core_index = pte->paddr/PAGE_SIZE;
+		pte->paddr = (vaddr_t)NULL;
+		spinlock_acquire(&coremap_lock);
+		coremap[core_index].chunk_size = -1;
+		coremap[core_index].p_state = PS_FREE;
+		spinlock_release(&coremap_lock);
+	}
+
 }
 
 
