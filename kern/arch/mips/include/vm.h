@@ -75,7 +75,6 @@
  * last valid user address.)
  */
 #define USERSPACETOP  MIPS_KSEG0
-
 /*
  * The starting value for the stack pointer at user level.  Because
  * the stack is subtract-then-store, this can start as the next
@@ -84,7 +83,10 @@
  * We put the stack at the very top of user virtual memory because it
  * grows downwards.
  */
+
 #define USERSTACK     USERSPACETOP
+#define STACKLIMIT 4*1024*1024
+#define USERSTACKBASE USERSTACK-STACKLIMIT
 
 /*
  * Interface to the low-level module that looks after the amount of

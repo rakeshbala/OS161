@@ -71,16 +71,52 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	if (newas==NULL) {
 		return ENOMEM;
 	}
+	copy_page_table(old->page_table, newas->page_table);
+	copy_regions(old->regions, newas->regions);
+	newas->heap_start = old->heap_start;
+	newas->heap_end = old->heap_end;
+	newas->stack_end = old->stack_end;
+	/************ RB:Allocate and copy pages ************/
+	struct page_table_entry *temp = newas->page_table;
+	while(newas->next != NULL)
 
-	/*
-	 * Write this.
-	 */
 
-	(void)old;
 
 	*ret = newas;
 	return 0;
 }
+
+void
+copy_page_table(struct page_table_entry *oldpt, struct page_table_entry *newpt)
+{
+	if (oldpt->next == NULL)
+	{
+		return;
+	}else{
+		newpt = kmalloc(sizeof(struct page_table_entry));
+		newpt->vaddr = oldpt->paddr;
+		newpt->permission = oldpt->permission;
+		newpt->on_disk = oldpt->on_disk;
+		copy_page_table(oldpt->next,newpt->next);
+	}
+}
+
+void
+copy_regions(struct region_entry *old_regions, struct region_entry *new_region)
+{
+	if (old_regions->next == NULL)
+	{
+		return;
+	}else{
+		new_region = kmalloc(sizeof(struct region_entry));
+		new_region->reg_base = old_regions->reg_base;
+		new_region->bounds = old_regions->reg_base;
+		new_region->original_perm = old_regions->original_perm;
+		new_region->backup_perm = old_regions->backup_perm;
+		copy_regions(old_regions->next,new_region->next);
+	}
+}
+
 
 void
 as_destroy(struct addrspace *as)
@@ -264,7 +300,7 @@ void page_free(vaddr_t vaddr){
 	struct page_table_entry *pte = getPTE(curthread->t_addrspace->page_table, vaddr);
 	KASSERT(pte != NULL);
 	int core_index = pte->paddr/PAGE_SIZE;
-	pte->paddr = NULL;
+	pte->paddr = (vaddr_t)NULL;
 	spinlock_acquire(&coremap_lock);
 	coremap[core_index].chunk_size = -1;
 	coremap[core_index].p_state = PS_FREE;

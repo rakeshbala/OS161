@@ -36,6 +36,7 @@
 
 
 #include <vm.h>
+#include "vm_enum.h"
 #include "opt-dumbvm.h"
 
 struct vnode;
@@ -48,11 +49,7 @@ struct vnode;
  * You write this.
  */
 
-typedef enum {
-  AX_READ = 1,
-  AX_WRITE = 2,
-  AX_EXECUTE = 4
-} ax_permssion;
+
 
 struct page_table_entry{
   vaddr_t vaddr;

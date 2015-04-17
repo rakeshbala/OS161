@@ -39,6 +39,7 @@
 #include <addrspace.h>
 #include <machine/vm.h>
 #include <synch.h>
+#include "vm_enum.h"
 
 /* Fault-type arguments to vm_fault() */
 #define VM_FAULT_READ        0    /* A read was attempted */
@@ -47,12 +48,7 @@
 
 
 /************ RB:Coremap Declarations ************/
-typedef enum {
-	PS_FREE,
-	PS_FIXED,
-	PS_CLEAN,
-	PS_DIRTY
-} page_state;
+
 
 
 struct coremap_entry
@@ -78,6 +74,9 @@ void vm_bootstrap(void);
 
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress);
+
+/*********** RR: sanity check for any TLB fault address ***********/
+bool vm_validitycheck(vaddr_t faultaddress, struct addrspace* pas, ax_permssion *perm);
 
 /* Allocate/free kernel heap pages (called by kmalloc/kfree) */
 vaddr_t alloc_kpages(int npages);

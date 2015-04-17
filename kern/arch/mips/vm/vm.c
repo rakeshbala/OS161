@@ -264,3 +264,37 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	splx(spl);
 	return EFAULT;
 }
+
+bool 
+vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
+{
+	KASSERT(pas != NULL);
+	struct region_entry* process_regions = pas->regions;
+	KASSERT(process_regions!= NULL);
+	while(process_regions != NULL)
+	{
+		vaddr_t base = process_regions->reg_base;
+		vaddr_t top = base + process_regions->bounds;
+		if(faultaddress >= base && faultaddress <= top)
+		{
+			*perm = process_regions->original_perm;
+			return true;
+		}
+		process_regions = process_regions->next;
+	}
+	if(faultaddress >= pas->heap_start && faultaddress <= pas->heap_end)
+	{
+		*perm = AX_READ|AX_WRITE;
+		return true;
+	}
+	/*********** RR: check for stack range within 4MB from stack top ***********/
+	if(faultaddress >= USERSTACKBASE && faultaddress <= USERSPACETOP)
+	{
+		*perm = AX_READ|AX_WRITE;
+		return true;
+	}
+
+	*perm = 0;
+	return false;
+}
+
