@@ -184,91 +184,84 @@ vm_tlbshootdown(const struct tlbshootdown *ts)
 int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
-	vaddr_t vbase1, vtop1, vbase2, vtop2, stackbase, stacktop;
+
 	paddr_t paddr;
-	int i;
 	uint32_t ehi, elo;
 	struct addrspace *as;
 	int spl;
-
 	faultaddress &= PAGE_FRAME;
-
-	DEBUG(DB_VM, "dumbvm: fault: 0x%x\n", faultaddress);
-
+	ax_permssion region_perm;
+	as = curthread->t_addrspace;
+	if (as == NULL) {
+		return EFAULT; //as not setup
+	}
+	int result = vm_validitycheck(faultaddress, curthread->t_addrspace, &region_perm);
+	if (result == false)
+	{
+		return EFAULT;
+	}
+	DEBUG(DB_VM, "VM: fault: 0x%x\n", faultaddress);
 	switch (faulttype) {
 	    case VM_FAULT_READONLY:
-		/* We always create pages read-write, so we can't get this */
-		panic("dumbvm: got VM_FAULT_READONLY\n");
+	    	if (!((region_perm & AX_WRITE) == AX_WRITE))
+	    	{
+	    		return EFAULT;
+	    	}
+	    	break;
 	    case VM_FAULT_READ:
+	    	if (!((region_perm & AX_READ) == AX_READ))
+	    	{
+	    		return EFAULT;
+	    	}
+	    	break;
 	    case VM_FAULT_WRITE:
-		break;
+	    	if (!((region_perm & AX_WRITE) == AX_WRITE))
+	    	{
+	    		return EFAULT;
+	    	}
+	    	break;
 	    default:
 		return EINVAL;
 	}
 
-	as = curthread->t_addrspace;
-	if (as == NULL) {
-		/*
-		 * No address space set up. This is probably a kernel
-		 * fault early in boot. Return EFAULT so as to panic
-		 * instead of getting into an infinite faulting loop.
-		 */
-		return EFAULT;
+
+	struct page_table_entry *pte = getPTE(as->page_table,faultaddress);
+	if (pte == NULL)
+	{
+		pte = addPTE(as, faultaddress, 0);
 	}
 
-	/* Assert that the address space has been set up properly. */
-	as_check_regions(as);
-
-
-
-	vbase1 = as->as_vbase1;
-	vtop1 = vbase1 + as->as_npages1 * PAGE_SIZE;
-	vbase2 = as->as_vbase2;
-	vtop2 = vbase2 + as->as_npages2 * PAGE_SIZE;
-	stackbase = USERSTACK - DUMBVM_STACKPAGES * PAGE_SIZE;
-	stacktop = USERSTACK;
-
-	if (faultaddress >= vbase1 && faultaddress < vtop1) {
-		paddr = (faultaddress - vbase1) + as->as_pbase1;
+	if (pte->paddr == 0)
+	{
+		result = page_alloc(pte);
+		if (result !=0) return ENOMEM;
 	}
-	else if (faultaddress >= vbase2 && faultaddress < vtop2) {
-		paddr = (faultaddress - vbase2) + as->as_pbase2;
-	}
-	else if (faultaddress >= stackbase && faultaddress < stacktop) {
-		paddr = (faultaddress - stackbase) + as->as_stackpbase;
-	}
-	else {
-		return EFAULT;
-	}
+
 
 	/* make sure it's page-aligned */
 	KASSERT((paddr & PAGE_FRAME) == paddr);
 
 	/* Disable interrupts on this CPU while frobbing the TLB. */
 	spl = splhigh();
-
-	for (i=0; i<NUM_TLB; i++) {
-		tlb_read(&ehi, &elo, i);
-		if (elo & TLBLO_VALID) {
-			continue;
-		}
-		ehi = faultaddress;
+	ehi = faultaddress;
+	if ((region_perm & AX_WRITE) == AX_WRITE)
+	{
 		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
-		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
-		tlb_write(ehi, elo, i);
-		splx(spl);
-		return 0;
+	}else{
+		elo = paddr|TLBLO_VALID;
 	}
-
-	kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
+	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, paddr);
+	tlb_random(ehi, elo);
 	splx(spl);
-	return EFAULT;
+	return 0;
 }
 
-bool 
+bool
 vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 {
 	KASSERT(pas != NULL);
+	/* Assert that the address space has been set up properly. */
+	as_check_regions(pas);
 	struct region_entry* process_regions = pas->regions;
 	KASSERT(process_regions!= NULL);
 	while(process_regions != NULL)
@@ -288,9 +281,14 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 		return true;
 	}
 	/*********** RR: check for stack range within 4MB from stack top ***********/
-	if(faultaddress >= USERSTACKBASE && faultaddress <= USERSPACETOP)
+	if((faultaddress >= pas->stack_end - PAGE_SIZE && faultaddress <= USERSPACETOP)&&
+		(faultaddress >= USERSTACKBASE))
 	{
 		*perm = AX_READ|AX_WRITE;
+		if (faultaddress < pas->stack_end)
+		{
+			pas->stack_end -= PAGE_SIZE;
+		}
 		return true;
 	}
 
