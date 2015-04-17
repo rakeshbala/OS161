@@ -297,3 +297,28 @@ void cleanup_dirtyproc(struct addrspace * as, char **kbuf, int argc)
 		kfree(kbuf[i]);
 	}
 }
+
+int
+sys_sbrk(intptr_t amount,struct addrspace* as,void** returnVal)
+{
+	
+	/*********** RR: logic for alignment checking ***********/
+	//if amount is not aligned, reject
+	vaddr_t new_heap = as->heap_end + amount;
+	if(new_heap >= as->heap_start)
+	{
+		if(new_heap < USERSTACKBASE)
+		{
+			returnVal = as->heap_end;
+			as->heap_end = new_heap;
+			return 0;
+		}
+		else
+			return ENOMEM;
+	}
+	else
+	{
+		returnVal = -1;
+		return EINVAL;
+	}	
+}

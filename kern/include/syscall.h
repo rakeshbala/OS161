@@ -70,5 +70,6 @@ int sys_waitpid(int pid, userptr_t status, int options, pid_t *ret_pid);
 int sys_fork(struct trapframe *tf, pid_t *ret_pid);
 int sys_dup2(int oldfd, int newfd, int *ret_fd);
 int sys_execv(userptr_t program, userptr_t args);
+int sys_sbrk(intptr_t amount,struct addrspace *as,void* returnVal);
 
 #endif /* _SYSCALL_H_ */

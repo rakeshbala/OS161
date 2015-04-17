@@ -80,6 +80,9 @@ void vm_bootstrap(void);
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress);
 
+/*********** RR: sanity check for any TLB fault address ***********/
+bool vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm);
+
 /* Allocate/free kernel heap pages (called by kmalloc/kfree) */
 vaddr_t alloc_kpages(int npages);
 void free_kpages(vaddr_t addr);
