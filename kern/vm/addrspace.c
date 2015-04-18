@@ -61,7 +61,7 @@ as_create(void)
 	as->regions = NULL;
 	as->stack_end = USERSTACK;
 	as->page_table = NULL;
-
+	kprintf("As created %p",as);
 	return as;
 }
 
@@ -69,7 +69,6 @@ int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
 	struct addrspace *newas;
-
 	newas = as_create();
 	if (newas==NULL) {
 		return ENOMEM;
@@ -84,6 +83,8 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->heap_end = old->heap_end;
 	newas->stack_end = old->stack_end;
 	*ret = newas;
+	kprintf("As copied\n");
+
 	return 0;
 }
 
@@ -133,6 +134,8 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
+	kprintf("AS Destroyed: %p\n",as);
+
 	if (as != NULL)
 	{
 		while(as->page_table != NULL){
@@ -149,6 +152,7 @@ as_destroy(struct addrspace *as)
 		}
 	}
 	kfree(as);
+
 }
 
 void
@@ -157,7 +161,6 @@ as_activate(struct addrspace *as)
 	int i, spl;
 
 	(void)as;
-
 	/* Disable interrupts on this CPU while frobbing the TLB. */
 	spl = splhigh();
 
@@ -218,7 +221,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	as->heap_start = vaddr + sz;
 	as->heap_start += (PAGE_SIZE - (as->heap_start % PAGE_SIZE));
 	as->heap_end = as->heap_start;
-
+	kprintf("Region defined\n");
 	return 0;
 }
 
@@ -227,7 +230,6 @@ as_prepare_load(struct addrspace *as)
 {
 	KASSERT(as != NULL);
 	KASSERT(as->regions != NULL);
-
 	/************ RB:Loop through all regions to make them read write ************/
 	/************ RB:Only for loadelf. Will change this back in as_complete_load ************/
 	struct region_entry *temp_region = as->regions;
