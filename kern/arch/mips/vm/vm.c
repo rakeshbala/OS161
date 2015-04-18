@@ -92,11 +92,8 @@ paddr_t
 getppages(unsigned long npages)
 {
 	paddr_t addr;
-
 	spinlock_acquire(&stealmem_lock);
-
 	addr = ram_stealmem(npages);
-
 	spinlock_release(&stealmem_lock);
 	return addr;
 }
@@ -223,15 +220,20 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		return EINVAL;
 	}
 
-
+	/************ RB:Check if page fault ************/
 	struct page_table_entry *pte = getPTE(as->page_table,faultaddress);
 	if (pte == NULL)
 	{
 		pte = addPTE(as, faultaddress, 0);
+		if (pte == NULL)
+		{
+			return ENOMEM;
+		}
 	}
 
 	if (pte->paddr == 0)
 	{
+		/************ RB:Allocate since it is page fault ************/
 		result = page_alloc(pte);
 		if (result !=0) return ENOMEM;
 	}

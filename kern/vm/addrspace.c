@@ -43,14 +43,13 @@
 //  * used. The cheesy hack versions in dumbvm.c are used instead.
 //  */
 //
-int copy_page_table(struct page_table_entry *oldpt, struct page_table_entry *newpt);
-void copy_regions(struct region_entry *old_regions, struct region_entry *new_region);
+int copy_page_table(struct page_table_entry *oldpt, struct page_table_entry **newpt);
+int copy_regions(struct region_entry *old_regions, struct region_entry **new_region);
 
 struct addrspace *
 as_create(void)
 {
 	struct addrspace *as;
-
 	as = kmalloc(sizeof(struct addrspace));
 	if (as == NULL) {
 		return NULL;
@@ -61,7 +60,7 @@ as_create(void)
 	as->regions = NULL;
 	as->stack_end = USERSTACK;
 	as->page_table = NULL;
-	kprintf("As created %p",as);
+	kprintf("As created %p\n",as);
 	return as;
 }
 
@@ -73,12 +72,23 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	if (newas==NULL) {
 		return ENOMEM;
 	}
-	int result = copy_page_table(old->page_table, newas->page_table);
+	int result = copy_page_table(old->page_table, &newas->page_table);
 	if (result != 0)
 	{
+		kfree(newas);
 		return ENOMEM;
 	}
-	copy_regions(old->regions, newas->regions);
+	result = copy_regions(old->regions, &newas->regions);
+	if (result != 0)
+	{
+		while(newas->page_table != NULL){
+			struct page_table_entry *temp = newas->page_table;
+			newas->page_table = newas->page_table->next;
+			kfree(temp);
+		}
+		kfree(newas);
+		return ENOMEM;
+	}
 	newas->heap_start = old->heap_start;
 	newas->heap_end = old->heap_end;
 	newas->stack_end = old->stack_end;
@@ -89,41 +99,62 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 }
 
 int
-copy_page_table(struct page_table_entry *oldpt, struct page_table_entry *newpt)
+copy_page_table(struct page_table_entry *oldpt, struct page_table_entry **newpt)
 {
 	if (oldpt->next == NULL)
 	{
 		return 0;
 	}else{
-		newpt = kmalloc(sizeof(struct page_table_entry));
-		newpt->vaddr = oldpt->vaddr;
-		int result = page_alloc(newpt);
-		if (result != 0)
+		*newpt = kmalloc(sizeof(struct page_table_entry));
+		if (*newpt == NULL)
 		{
 			return ENOMEM;
 		}
+		(*newpt)->vaddr = oldpt->vaddr;
+		int result = page_alloc(*newpt);
+		if (result != 0)
+		{
+			kfree(*newpt);
+			return ENOMEM;
+		}
 		memmove((void *)PADDR_TO_KVADDR(oldpt->paddr),
-			(const void *)PADDR_TO_KVADDR(newpt->paddr),PAGE_SIZE);
-		newpt->permission = oldpt->permission;
-		newpt->on_disk = oldpt->on_disk;
-		copy_page_table(oldpt->next,newpt->next);
+			(const void *)PADDR_TO_KVADDR((*newpt)->paddr),PAGE_SIZE);
+		(*newpt)->permission = oldpt->permission;
+		(*newpt)->on_disk = oldpt->on_disk;
+		result = copy_page_table(oldpt->next,&((*newpt)->next));
+		if (result != 0)
+		{
+			page_free(*newpt);
+			kfree(*newpt);
+			return ENOMEM;
+		}
 		return 0;
 	}
 }
 
-void
-copy_regions(struct region_entry *old_regions, struct region_entry *new_region)
+int
+copy_regions(struct region_entry *old_regions, struct region_entry **new_region)
 {
 	if (old_regions->next == NULL)
 	{
-		return;
+		return 0;
 	}else{
-		new_region = kmalloc(sizeof(struct region_entry));
-		new_region->reg_base = old_regions->reg_base;
-		new_region->bounds = old_regions->reg_base;
-		new_region->original_perm = old_regions->original_perm;
-		new_region->backup_perm = old_regions->backup_perm;
-		copy_regions(old_regions->next,new_region->next);
+		*new_region = kmalloc(sizeof(struct region_entry));
+		if (new_region == NULL)
+		{
+			return ENOMEM;
+		}
+		(*new_region)->reg_base = old_regions->reg_base;
+		(*new_region)->bounds = old_regions->reg_base;
+		(*new_region)->original_perm = old_regions->original_perm;
+		(*new_region)->backup_perm = old_regions->backup_perm;
+		int result =  copy_regions(old_regions->next,&(*new_region)->next);
+		if (result != 0)
+		{
+			kfree(*new_region);
+			return ENOMEM;
+		}
+		return 0;
 	}
 }
 
@@ -142,16 +173,16 @@ as_destroy(struct addrspace *as)
 			struct page_table_entry *temp_page_t = as->page_table;
 			page_free(temp_page_t);
 			as->page_table = as->page_table->next;
-			kfree(temp_page_t);
+			// kfree(temp_page_t);
 		}
 
 		while(as->regions != NULL){
-			struct region_entry *temp_region = as->regions;
+			// struct region_entry *temp_region = as->regions;
 			as->regions = as->regions->next;
-			kfree(temp_region);
+			// kfree(temp_region);
 		}
 	}
-	kfree(as);
+	// kfree(as);
 
 }
 

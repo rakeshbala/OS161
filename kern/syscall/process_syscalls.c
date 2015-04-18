@@ -299,7 +299,7 @@ void cleanup_dirtyproc(struct addrspace * as, char **kbuf, int argc)
 }
 
 int
-sys_sbrk(intptr_t amount,struct addrspace* as,void* returnVal)
+sys_sbrk(intptr_t amount,struct addrspace* as,int *returnVal)
 {
 
 	/*********** RR: logic for alignment checking ***********/
@@ -309,7 +309,7 @@ sys_sbrk(intptr_t amount,struct addrspace* as,void* returnVal)
 	{
 		if(new_heap < (vaddr_t)USERSTACKBASE)
 		{
-			returnVal = (void *)as->heap_end;
+			*returnVal = as->heap_end;
 			as->heap_end = new_heap;
 			return 0;
 		}
@@ -318,7 +318,7 @@ sys_sbrk(intptr_t amount,struct addrspace* as,void* returnVal)
 	}
 	else
 	{
-		returnVal = (void *)-1;
+		*returnVal = -1;
 		return EINVAL;
 	}
 }
