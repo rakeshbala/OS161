@@ -173,16 +173,16 @@ as_destroy(struct addrspace *as)
 			struct page_table_entry *temp_page_t = as->page_table;
 			page_free(temp_page_t);
 			as->page_table = as->page_table->next;
-			// kfree(temp_page_t);
+			kfree(temp_page_t);
 		}
 
 		while(as->regions != NULL){
-			// struct region_entry *temp_region = as->regions;
+			struct region_entry *temp_region = as->regions;
 			as->regions = as->regions->next;
-			// kfree(temp_region);
+			kfree(temp_region);
 		}
 	}
-	// kfree(as);
+	kfree(as);
 
 }
 

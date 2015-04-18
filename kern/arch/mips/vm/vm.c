@@ -53,6 +53,7 @@ vm_bootstrap(void)
 {
 
 	spinlock_init(&coremap_lock);
+	spinlock_init(&tlb_lock);
 	/************ RB:Accomodate for last address misalignment ************/
 	paddr_t fpaddr,lpaddr;
 	ram_getsize(&fpaddr,&lpaddr);
@@ -252,7 +253,9 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		elo = pte->paddr|TLBLO_VALID;
 	}
 	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
+	spinlock_acquire(&tlb_lock);
 	tlb_random(ehi, elo);
+	spinlock_release(&tlb_lock);
 	splx(spl);
 	return 0;
 }
