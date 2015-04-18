@@ -296,4 +296,3 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 	*perm = 0;
 	return false;
 }
-
