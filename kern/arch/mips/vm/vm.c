@@ -41,7 +41,7 @@
 
 
 /* under dumbvm, always have 48k of user stack */
-#define DUMBVM_STACKPAGES    12
+// #define DUMBVM_STACKPAGES    12
 
 /*
  * Wrap rma_stealmem in a spinlock.
@@ -54,6 +54,7 @@ vm_bootstrap(void)
 
 	spinlock_init(&coremap_lock);
 	spinlock_init(&tlb_lock);
+	// dbflags = dbflags | DB_VM;
 	/************ RB:Accomodate for last address misalignment ************/
 	paddr_t fpaddr,lpaddr;
 	ram_getsize(&fpaddr,&lpaddr);
@@ -235,7 +236,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	if (pte->paddr == 0)
 	{
 		/************ RB:Allocate since it is page fault ************/
-		result = page_alloc(pte);
+		result = page_alloc(pte,as);
 		if (result !=0) return ENOMEM;
 	}
 
@@ -253,6 +254,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		elo = pte->paddr|TLBLO_VALID;
 	}
 	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
+
 	spinlock_acquire(&tlb_lock);
 	tlb_random(ehi, elo);
 	spinlock_release(&tlb_lock);

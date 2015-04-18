@@ -43,7 +43,8 @@
 //  * used. The cheesy hack versions in dumbvm.c are used instead.
 //  */
 //
-int copy_page_table(struct page_table_entry *oldpt, struct page_table_entry **newpt);
+int copy_page_table(struct addrspace *newas,
+	struct page_table_entry *oldpt, struct page_table_entry **newpt);
 int copy_regions(struct region_entry *old_regions, struct region_entry **new_region);
 
 struct addrspace *
@@ -72,13 +73,14 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	if (newas==NULL) {
 		return ENOMEM;
 	}
-	int result = copy_page_table(old->page_table, &newas->page_table);
+	int result = copy_page_table(newas,old->page_table, &(newas->page_table));
 	if (result != 0)
 	{
 		kfree(newas);
 		return ENOMEM;
 	}
-	result = copy_regions(old->regions, &newas->regions);
+	KASSERT(newas->page_table != NULL);
+	result = copy_regions(old->regions, &(newas->regions));
 	if (result != 0)
 	{
 		while(newas->page_table != NULL){
@@ -89,6 +91,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		kfree(newas);
 		return ENOMEM;
 	}
+	KASSERT(newas->regions != NULL);
 	newas->heap_start = old->heap_start;
 	newas->heap_end = old->heap_end;
 	newas->stack_end = old->stack_end;
@@ -99,9 +102,10 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 }
 
 int
-copy_page_table(struct page_table_entry *oldpt, struct page_table_entry **newpt)
+copy_page_table(struct addrspace *newas,
+	struct page_table_entry *oldpt, struct page_table_entry **newpt)
 {
-	if (oldpt->next == NULL)
+	if (oldpt == NULL)
 	{
 		return 0;
 	}else{
@@ -111,7 +115,7 @@ copy_page_table(struct page_table_entry *oldpt, struct page_table_entry **newpt)
 			return ENOMEM;
 		}
 		(*newpt)->vaddr = oldpt->vaddr;
-		int result = page_alloc(*newpt);
+		int result = page_alloc(*newpt, newas);
 		if (result != 0)
 		{
 			kfree(*newpt);
@@ -121,7 +125,7 @@ copy_page_table(struct page_table_entry *oldpt, struct page_table_entry **newpt)
 			(const void *)PADDR_TO_KVADDR((*newpt)->paddr),PAGE_SIZE);
 		(*newpt)->permission = oldpt->permission;
 		(*newpt)->on_disk = oldpt->on_disk;
-		result = copy_page_table(oldpt->next,&((*newpt)->next));
+		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
 		if (result != 0)
 		{
 			page_free(*newpt);
@@ -135,7 +139,7 @@ copy_page_table(struct page_table_entry *oldpt, struct page_table_entry **newpt)
 int
 copy_regions(struct region_entry *old_regions, struct region_entry **new_region)
 {
-	if (old_regions->next == NULL)
+	if (old_regions == NULL)
 	{
 		return 0;
 	}else{
@@ -145,9 +149,11 @@ copy_regions(struct region_entry *old_regions, struct region_entry **new_region)
 			return ENOMEM;
 		}
 		(*new_region)->reg_base = old_regions->reg_base;
-		(*new_region)->bounds = old_regions->reg_base;
+		(*new_region)->bounds = old_regions->bounds;
 		(*new_region)->original_perm = old_regions->original_perm;
 		(*new_region)->backup_perm = old_regions->backup_perm;
+		kprintf("Copied region : %lx -> %lx\n",(unsigned long int)(*new_region)->reg_base,
+			(unsigned long int)((*new_region)->reg_base+(*new_region)->bounds));
 		int result =  copy_regions(old_regions->next,&(*new_region)->next);
 		if (result != 0)
 		{
@@ -194,10 +200,11 @@ as_activate(struct addrspace *as)
 	(void)as;
 	/* Disable interrupts on this CPU while frobbing the TLB. */
 	spl = splhigh();
-
+	spinlock_acquire(&tlb_lock);
 	for (i=0; i<NUM_TLB; i++) {
 		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
+	spinlock_release(&tlb_lock);
 	splx(spl);
 }
 
@@ -217,7 +224,8 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		 int readable, int writeable, int executable)
 {
 
-	size_t npages;
+	kprintf("Region from %lx to %lx\n",(long unsigned int)vaddr,
+		(long unsigned int)vaddr+sz);
 
 	/* Align the region. First, the base... */
 	sz += vaddr & ~(vaddr_t)PAGE_FRAME;
@@ -225,24 +233,6 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 
 	/* ...and now the length. */
 	sz = (sz + PAGE_SIZE - 1) & PAGE_FRAME;
-
-	npages = sz / PAGE_SIZE;
-
-	// for (size_t i = 0; i < npages; ++i)
-	// {
-	// 	struct page_table_entry *entry = addPTE(as,
-	// 		vaddr+i*PAGE_SIZE, 0);
-	// 	if (entry == NULL)
-	// 	{
-	// 		return ENOMEM;
-	// 	}
-
-	// 	if (readable) entry->permission = entry->permission|AX_READ;
-	// 	if (writeable) entry->permission = entry->permission|AX_WRITE;
-	// 	if (executable) entry->permission = entry->permission|AX_EXECUTE;
-
-	// }
-
 	struct region_entry * region = addRegion(as, vaddr,sz,readable,
 		writeable,executable);
 	if (region == NULL)
@@ -250,9 +240,11 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		return ENOMEM;
 	}
 	as->heap_start = vaddr + sz;
-	as->heap_start += (PAGE_SIZE - (as->heap_start % PAGE_SIZE));
+	// as->heap_start += (as->heap_start + PAGE_SIZE - 1) & PAGE_FRAME;
 	as->heap_end = as->heap_start;
-	kprintf("Region defined\n");
+	kprintf("Region defined  from %lx to %lx\n",(long unsigned int)vaddr,
+		(long unsigned int)vaddr+sz);
+	kprintf("Heap moved to %lx\n",(long unsigned int)as->heap_end);
 	return 0;
 }
 
@@ -315,7 +307,7 @@ as_check_regions(struct addrspace *as)
 	KASSERT (as->stack_end != 0);
 }
 
-int page_alloc(struct page_table_entry *pte){
+int page_alloc(struct page_table_entry *pte, struct addrspace *as){
 	KASSERT(pte != NULL);
 	for (unsigned int i = search_start; i < coremap_size; ++i)
 	{
@@ -325,8 +317,8 @@ int page_alloc(struct page_table_entry *pte){
 		{
 			entry.p_state = PS_DIRTY;
 			entry.chunk_size = 1;
-			entry.va = pte->vaddr;
-			entry.as = curthread->t_addrspace;
+			entry.va = pte->vaddr & PAGE_FRAME;
+			entry.as = as;
 			coremap[i] = entry;
 			spinlock_release(&coremap_lock);
 			pte->paddr = i*PAGE_SIZE;
