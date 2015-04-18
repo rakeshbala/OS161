@@ -198,25 +198,25 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 	DEBUG(DB_VM, "VM: fault: 0x%x\n", faultaddress);
 	switch (faulttype) {
-	    case VM_FAULT_READONLY:
-	    	if (!((region_perm & AX_WRITE) == AX_WRITE))
-	    	{
-	    		return EFAULT;
-	    	}
-	    	break;
-	    case VM_FAULT_READ:
-	    	if (!((region_perm & AX_READ) == AX_READ))
-	    	{
-	    		return EFAULT;
-	    	}
-	    	break;
-	    case VM_FAULT_WRITE:
-	    	if (!((region_perm & AX_WRITE) == AX_WRITE))
-	    	{
-	    		return EFAULT;
-	    	}
-	    	break;
-	    default:
+		case VM_FAULT_READONLY:
+			if (!((region_perm & AX_WRITE) == AX_WRITE))
+			{
+				return EFAULT;
+			}
+			break;
+		case VM_FAULT_READ:
+			if (!((region_perm & AX_READ) == AX_READ))
+			{
+				return EFAULT;
+			}
+			break;
+		case VM_FAULT_WRITE:
+			if (!((region_perm & AX_WRITE) == AX_WRITE))
+			{
+				return EFAULT;
+			}
+			break;
+		default:
 		return EINVAL;
 	}
 
