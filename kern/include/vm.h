@@ -67,6 +67,7 @@ unsigned int coremap_size;
 unsigned int search_start;
 
 
+struct spinlock tlb_lock;
 
 
 /* Initialization function */

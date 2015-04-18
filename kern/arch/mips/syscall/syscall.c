@@ -206,8 +206,8 @@ syscall(struct trapframe *tf)
 		}
 		case SYS_sbrk:
 		{
-			void * ret;
-			err = sys_sbrk((intptr_t)tf->tf_a0,curthread->t_addrspace,ret);
+			int ret;
+			err = sys_sbrk((intptr_t)tf->tf_a0,curthread->t_addrspace,&ret);
 			retval = (int32_t)ret;
 			break;
 		}

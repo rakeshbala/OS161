@@ -87,7 +87,7 @@
 #define USERSTACK     USERSPACETOP
 #define STACKLIMIT 4*1024*1024
 #define USERSTACKBASE USERSTACK-STACKLIMIT
-
+#define USERHEAPLIMIT 512*1024*1024
 /*
  * Interface to the low-level module that looks after the amount of
  * physical memory we have.

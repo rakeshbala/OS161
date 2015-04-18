@@ -150,7 +150,7 @@ void as_check_regions(struct addrspace *as);
 int load_elf(struct vnode *v, vaddr_t *entrypoint);
 
 /************ RB:User page allocation methods ************/
-int page_alloc (struct page_table_entry* pte);
+int page_alloc (struct page_table_entry* pte, struct addrspace *as);
 void page_free(struct page_table_entry *pte);
 
 /************ RB:Page table and region linked list functions ************/

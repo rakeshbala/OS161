@@ -41,7 +41,7 @@
 
 
 /* under dumbvm, always have 48k of user stack */
-#define DUMBVM_STACKPAGES    12
+// #define DUMBVM_STACKPAGES    12
 
 /*
  * Wrap rma_stealmem in a spinlock.
@@ -53,6 +53,8 @@ vm_bootstrap(void)
 {
 
 	spinlock_init(&coremap_lock);
+	spinlock_init(&tlb_lock);
+	// dbflags = dbflags | DB_VM;
 	/************ RB:Accomodate for last address misalignment ************/
 	paddr_t fpaddr,lpaddr;
 	ram_getsize(&fpaddr,&lpaddr);
@@ -92,11 +94,8 @@ paddr_t
 getppages(unsigned long npages)
 {
 	paddr_t addr;
-
 	spinlock_acquire(&stealmem_lock);
-
 	addr = ram_stealmem(npages);
-
 	spinlock_release(&stealmem_lock);
 	return addr;
 }
@@ -201,38 +200,43 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 	DEBUG(DB_VM, "VM: fault: 0x%x\n", faultaddress);
 	switch (faulttype) {
-	    case VM_FAULT_READONLY:
-	    	if (!((region_perm & AX_WRITE) == AX_WRITE))
-	    	{
-	    		return EFAULT;
-	    	}
-	    	break;
-	    case VM_FAULT_READ:
-	    	if (!((region_perm & AX_READ) == AX_READ))
-	    	{
-	    		return EFAULT;
-	    	}
-	    	break;
-	    case VM_FAULT_WRITE:
-	    	if (!((region_perm & AX_WRITE) == AX_WRITE))
-	    	{
-	    		return EFAULT;
-	    	}
-	    	break;
-	    default:
+		case VM_FAULT_READONLY:
+			if (!((region_perm & AX_WRITE) == AX_WRITE))
+			{
+				return EFAULT;
+			}
+			break;
+		case VM_FAULT_READ:
+			if (!((region_perm & AX_READ) == AX_READ))
+			{
+				return EFAULT;
+			}
+			break;
+		case VM_FAULT_WRITE:
+			if (!((region_perm & AX_WRITE) == AX_WRITE))
+			{
+				return EFAULT;
+			}
+			break;
+		default:
 		return EINVAL;
 	}
 
-
+	/************ RB:Check if page fault ************/
 	struct page_table_entry *pte = getPTE(as->page_table,faultaddress);
 	if (pte == NULL)
 	{
 		pte = addPTE(as, faultaddress, 0);
+		if (pte == NULL)
+		{
+			return ENOMEM;
+		}
 	}
 
 	if (pte->paddr == 0)
 	{
-		result = page_alloc(pte);
+		/************ RB:Allocate since it is page fault ************/
+		result = page_alloc(pte,as);
 		if (result !=0) return ENOMEM;
 	}
 
@@ -250,7 +254,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		elo = pte->paddr|TLBLO_VALID;
 	}
 	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
+
+	spinlock_acquire(&tlb_lock);
 	tlb_random(ehi, elo);
+	spinlock_release(&tlb_lock);
 	splx(spl);
 	return 0;
 }
@@ -294,4 +301,3 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 	*perm = 0;
 	return false;
 }
-

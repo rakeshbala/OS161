@@ -299,26 +299,29 @@ void cleanup_dirtyproc(struct addrspace * as, char **kbuf, int argc)
 }
 
 int
-sys_sbrk(intptr_t amount,struct addrspace* as,void* returnVal)
+sys_sbrk(intptr_t amount,struct addrspace* as,int *returnVal)
 {
 
 	/*********** RR: logic for alignment checking ***********/
 	//if amount is not aligned, reject
 	vaddr_t new_heap = as->heap_end + amount;
-	if(new_heap >= as->heap_start)
+	unsigned int tempAmount = amount > 0 ?amount:(amount * -1);
+	if(amount > 0 || tempAmount <= as->heap_end - as->heap_start)
 	{
-		if(new_heap < (vaddr_t)USERSTACKBASE)
+		if ((tempAmount <= USERSTACKBASE - as->heap_end) &&
+			(tempAmount < USERHEAPLIMIT))
 		{
-			returnVal = (void *)as->heap_end;
+			*returnVal = as->heap_end;
 			as->heap_end = new_heap;
+			kprintf("Heap moved to %lx\n",(long unsigned int)as->heap_end);
 			return 0;
-		}
-		else
+		}else{
 			return ENOMEM;
+		}
 	}
 	else
 	{
-		returnVal = (void *)-1;
+		*returnVal = -1;
 		return EINVAL;
 	}
 }
