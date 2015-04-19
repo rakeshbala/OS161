@@ -2,9 +2,9 @@
 #define _VM_ENUM_H_
 
 typedef enum {
-  AX_READ = 1,
+  AX_READ = 4,
   AX_WRITE = 2,
-  AX_EXECUTE = 4
+  AX_EXECUTE = 1
 } ax_permssion;
 
 

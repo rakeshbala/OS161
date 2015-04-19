@@ -61,7 +61,6 @@ as_create(void)
 	as->regions = NULL;
 	as->stack_end = USERSTACK;
 	as->page_table = NULL;
-	kprintf("As created %p\n",as);
 	return as;
 }
 
@@ -96,8 +95,6 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	newas->heap_end = old->heap_end;
 	newas->stack_end = old->stack_end;
 	*ret = newas;
-	kprintf("As copied\n");
-
 	return 0;
 }
 
@@ -121,8 +118,8 @@ copy_page_table(struct addrspace *newas,
 			kfree(*newpt);
 			return ENOMEM;
 		}
-		memmove((void *)PADDR_TO_KVADDR(oldpt->paddr),
-			(const void *)PADDR_TO_KVADDR((*newpt)->paddr),PAGE_SIZE);
+		memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
+			(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
 		(*newpt)->permission = oldpt->permission;
 		(*newpt)->on_disk = oldpt->on_disk;
 		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
@@ -133,6 +130,14 @@ copy_page_table(struct addrspace *newas,
 			return ENOMEM;
 		}
 		return 0;
+	}
+}
+
+void printPageTable(struct page_table_entry *page_table){
+	while(page_table != NULL){
+		kprintf("vaddr: %lx paddr:%lx\n",(unsigned long int)page_table->vaddr,
+			(unsigned long int) page_table->paddr);
+		page_table = page_table->next;
 	}
 }
 
@@ -152,8 +157,8 @@ copy_regions(struct region_entry *old_regions, struct region_entry **new_region)
 		(*new_region)->bounds = old_regions->bounds;
 		(*new_region)->original_perm = old_regions->original_perm;
 		(*new_region)->backup_perm = old_regions->backup_perm;
-		kprintf("Copied region : %lx -> %lx\n",(unsigned long int)(*new_region)->reg_base,
-			(unsigned long int)((*new_region)->reg_base+(*new_region)->bounds));
+		// kprintf("Copied region : %lx -> %lx\n",(unsigned long int)(*new_region)->reg_base,
+		// 	(unsigned long int)((*new_region)->reg_base+(*new_region)->bounds));
 		int result =  copy_regions(old_regions->next,&(*new_region)->next);
 		if (result != 0)
 		{
@@ -171,7 +176,7 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
-	kprintf("AS Destroyed: %p\n",as);
+	// kprintf("AS Destroyed: %p\n",as);
 
 	if (as != NULL)
 	{
@@ -224,8 +229,8 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		 int readable, int writeable, int executable)
 {
 
-	kprintf("Region from %lx to %lx\n",(long unsigned int)vaddr,
-		(long unsigned int)vaddr+sz);
+	// kprintf("Region from %lx to %lx\n",(long unsigned int)vaddr,
+	// 	(long unsigned int)vaddr+sz);
 
 	/* Align the region. First, the base... */
 	sz += vaddr & ~(vaddr_t)PAGE_FRAME;
@@ -242,9 +247,9 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	as->heap_start = vaddr + sz;
 	// as->heap_start += (as->heap_start + PAGE_SIZE - 1) & PAGE_FRAME;
 	as->heap_end = as->heap_start;
-	kprintf("Region defined  from %lx to %lx\n",(long unsigned int)vaddr,
-		(long unsigned int)vaddr+sz);
-	kprintf("Heap moved to %lx\n",(long unsigned int)as->heap_end);
+	// kprintf("Region defined  from %lx to %lx\n",(long unsigned int)vaddr,
+	// 	(long unsigned int)vaddr+sz);
+	// kprintf("Heap moved to %lx\n",(long unsigned int)as->heap_end);
 	return 0;
 }
 
@@ -322,6 +327,7 @@ int page_alloc(struct page_table_entry *pte, struct addrspace *as){
 			coremap[i] = entry;
 			spinlock_release(&coremap_lock);
 			pte->paddr = i*PAGE_SIZE;
+			bzero((void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE);
 			return 0;
 		}
 		spinlock_release(&coremap_lock);
@@ -408,9 +414,7 @@ struct region_entry * addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,in
 	new_entry->reg_base = rbase;
 	new_entry->bounds = sz;
 	new_entry->original_perm = 0;
-	if (r) new_entry->original_perm = new_entry->original_perm|AX_READ;
-	if (w) new_entry->original_perm = new_entry->original_perm|AX_WRITE;
-	if (x) new_entry->original_perm = new_entry->original_perm|AX_EXECUTE;
+	new_entry->original_perm = r|w|x;
 	new_entry->backup_perm = new_entry->original_perm;
 
 	if (as->regions == NULL)

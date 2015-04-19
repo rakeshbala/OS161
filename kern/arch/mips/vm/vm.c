@@ -129,10 +129,12 @@ alloc_kpages(int npages)
 					{
 						coremap[i].p_state = PS_FIXED;
 						coremap[i].chunk_size = npages;
+						coremap[i].va = KVADDR_TO_PADDR(pa);
 					}
 					// coremap[i].p_state = PS_FIXED;
 					// coremap[i].chunk_size = npages;
 					spinlock_release(&coremap_lock);
+					bzero((void *)PADDR_TO_KVADDR(pa), npages * PAGE_SIZE);
 					return PADDR_TO_KVADDR(pa);
 				}
 			}
@@ -261,9 +263,9 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
 
-	spinlock_acquire(&tlb_lock);
+	// spinlock_acquire(&tlb_lock);
 	tlb_random(ehi, elo);
-	spinlock_release(&tlb_lock);
+	// spinlock_release(&tlb_lock);
 	splx(spl);
 	return 0;
 }

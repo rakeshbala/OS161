@@ -94,6 +94,7 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 			,coremap[i].as);
 	}
 	kprintf("Coremap end\n");
+	printPageTable(curthread->t_addrspace->page_table);
 	spinlock_release(&tlb_lock);
 
 	KASSERT(code < NTRAPCODES);

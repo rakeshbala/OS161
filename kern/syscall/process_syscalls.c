@@ -110,7 +110,7 @@ sys_fork(struct trapframe *tf, pid_t *ret_pid)
 	{
 		return ENOMEM;
 	}
-	memcpy(child_tf,tf,sizeof(struct trapframe));
+	memmove(child_tf,tf,sizeof(struct trapframe));
 	int err;
 
 	struct thread *child_thread;
@@ -119,7 +119,6 @@ sys_fork(struct trapframe *tf, pid_t *ret_pid)
 	{
 		return err;
 	}
-
 	*ret_pid = child_thread->t_pid;
 	return 0;
 
@@ -131,7 +130,7 @@ void childfork_func(void * tf_ptr, unsigned long as)
 
 	/************ RB:Need trap frame on stack instead of heap ************/
 	struct trapframe tf;
-	memcpy(&tf,tf_ptr,sizeof(struct trapframe));
+	memmove(&tf,tf_ptr,sizeof(struct trapframe));
 	kfree(tf_ptr);
 	/************ RB:Prepare trap fame ************/
 	tf.tf_v0 = 0;

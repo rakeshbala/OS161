@@ -151,5 +151,6 @@ struct page_table_entry *getPTE(struct page_table_entry* page_table, vaddr_t vad
 
 struct region_entry *addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x);
 struct region_entry *getRegion(struct region_entry* regions, vaddr_t vaddr);
+void printPageTable(struct page_table_entry *entry);
 
 #endif /* _ADDRSPACE_H_ */

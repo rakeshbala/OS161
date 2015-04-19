@@ -56,9 +56,7 @@ int
 dofork(void)
 {
 	int pid;
-	printf("Before forking\n");
 	pid = fork();
-	printf("After forking\n");
 	if (pid < 0) {
 		warn("fork");
 	}
