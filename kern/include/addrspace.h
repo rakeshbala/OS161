@@ -50,8 +50,8 @@ struct vnode;
 struct page_table_entry{
   vaddr_t vaddr;
   paddr_t paddr;
-  ax_permssion permission;
-  bool on_disk;
+  // ax_permssion permission;
+  // bool on_disk;
   struct page_table_entry * next;
 };
 

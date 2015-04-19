@@ -50,6 +50,7 @@ int copy_regions(struct region_entry *old_regions, struct region_entry **new_reg
 struct addrspace *
 as_create(void)
 {
+	// kprintf("AS created\n");
 	struct addrspace *as;
 	as = kmalloc(sizeof(struct addrspace));
 	if (as == NULL) {
@@ -121,8 +122,8 @@ copy_page_table(struct addrspace *newas,
 		}
 		memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
 			(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
-		(*newpt)->permission = oldpt->permission;
-		(*newpt)->on_disk = oldpt->on_disk;
+		// (*newpt)->permission = oldpt->permission;
+		// (*newpt)->on_disk = oldpt->on_disk;
 
 		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
 		if (result != 0)
@@ -176,11 +177,7 @@ copy_regions(struct region_entry *old_regions, struct region_entry **new_region)
 void
 as_destroy(struct addrspace *as)
 {
-	/*
-	 * Clean up as needed.
-	 */
 	// kprintf("AS Destroyed: %p\n",as);
-
 	if (as != NULL)
 	{
 		while(as->page_table != NULL){
@@ -318,7 +315,7 @@ as_check_regions(struct addrspace *as)
 int page_alloc(struct page_table_entry *pte, struct addrspace *as){
 	KASSERT(pte != NULL);
 	KASSERT(as!=NULL);
-	for (unsigned int i = search_start; i < coremap_size; ++i)
+	for (unsigned int i = 0; i < coremap_size; ++i)
 	{
 		spinlock_acquire(&coremap_lock);
 		struct coremap_entry entry = coremap[i];
@@ -368,9 +365,9 @@ addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 	}
 	new_entry->vaddr = vaddr & PAGE_FRAME;
 	new_entry->paddr = paddr;
-	new_entry->on_disk = false;
+	// new_entry->on_disk = false;
 	new_entry->next = NULL;
-	new_entry->permission = 0;
+	// new_entry->permission = 0;
 
 	if (as->page_table == NULL)
 	{

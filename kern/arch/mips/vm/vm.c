@@ -108,7 +108,7 @@ alloc_kpages(int npages)
 	if (vm_is_bootstrapped == true)
 	{
 		spinlock_acquire(&coremap_lock);
-		for (unsigned int i = search_start; i < coremap_size; ++i)
+		for (unsigned int i = 0; i < coremap_size; ++i)
 		{
 			if (coremap[i].p_state == PS_FREE)
 			{

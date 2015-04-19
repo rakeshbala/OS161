@@ -82,18 +82,27 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 	int sig = 0;
 
 	/************ RB:Should be removed ************/
-	// spinlock_acquire(&tlb_lock);
-	// kprintf("Coremap:\n");
-	// for (unsigned int i = 72; i < coremap_size; ++i)
-	// {
-	// 	if (coremap[i].p_state == PS_FREE)
-	// 	{
-	// 		break;
-	// 	}
-	// 	kprintf("%d: vaddr:%lx as:%p\n",i,(unsigned long int)coremap[i].va
-	// 		,coremap[i].as);
-	// }
-	// kprintf("Coremap end\n");
+	int x = splhigh();
+	unsigned int i;
+	int fixed_count=0;
+	for (i = 0; i < coremap_size; ++i)
+	{
+		if (coremap[i].p_state == PS_FREE)
+		{
+			i++;
+			break;
+		}else if (coremap[i].p_state == PS_FIXED){
+			fixed_count++;
+		}
+		// kprintf("%d: vaddr:%lx as:%p\n",i,(unsigned long int)coremap[i].va
+			// ,coremap[i].as);
+	}
+	kprintf("\n----\n");
+	kprintf("Coremap last filled entry: %u/%d\n",i,coremap_size);
+	kprintf("Number of kpages: %d\n",fixed_count);
+	kprintf("----\n");
+	splx(x);
+
 	// printPageTable(curthread->t_addrspace->page_table);
 	// spinlock_release(&tlb_lock);
 
