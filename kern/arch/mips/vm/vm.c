@@ -113,7 +113,7 @@ alloc_kpages(int npages)
 			if (coremap[i].p_state == PS_FREE)
 			{
 				bool allFree = true;
-				for (unsigned int j = i+1; j < (unsigned int)npages && j<coremap_size; ++j)
+				for (unsigned int j = i+1; j < ((unsigned int)npages+i) && j<coremap_size; ++j)
 				{
 					if (coremap[j].p_state != PS_FREE)
 					{
@@ -123,9 +123,15 @@ alloc_kpages(int npages)
 				}
 				if (allFree)
 				{
-					coremap[i].p_state = PS_FIXED;
-					coremap[i].chunk_size = npages;
 					paddr_t pa = i*PAGE_SIZE;
+					unsigned int limit = npages + i;
+					for (; i < limit && i< coremap_size; ++i)
+					{
+						coremap[i].p_state = PS_FIXED;
+						coremap[i].chunk_size = npages;
+					}
+					// coremap[i].p_state = PS_FIXED;
+					// coremap[i].chunk_size = npages;
 					spinlock_release(&coremap_lock);
 					return PADDR_TO_KVADDR(pa);
 				}
