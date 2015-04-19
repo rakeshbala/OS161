@@ -104,6 +104,7 @@ copy_page_table(struct addrspace *newas,
 {
 	if (oldpt == NULL)
 	{
+		(*newpt) = NULL;
 		return 0;
 	}else{
 		*newpt = kmalloc(sizeof(struct page_table_entry));
@@ -122,6 +123,7 @@ copy_page_table(struct addrspace *newas,
 			(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
 		(*newpt)->permission = oldpt->permission;
 		(*newpt)->on_disk = oldpt->on_disk;
+
 		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
 		if (result != 0)
 		{
@@ -146,6 +148,7 @@ copy_regions(struct region_entry *old_regions, struct region_entry **new_region)
 {
 	if (old_regions == NULL)
 	{
+		(*new_region) = NULL;
 		return 0;
 	}else{
 		*new_region = kmalloc(sizeof(struct region_entry));
@@ -314,6 +317,7 @@ as_check_regions(struct addrspace *as)
 
 int page_alloc(struct page_table_entry *pte, struct addrspace *as){
 	KASSERT(pte != NULL);
+	KASSERT(as!=NULL);
 	for (unsigned int i = search_start; i < coremap_size; ++i)
 	{
 		spinlock_acquire(&coremap_lock);

@@ -82,20 +82,20 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 	int sig = 0;
 
 	/************ RB:Should be removed ************/
-	spinlock_acquire(&tlb_lock);
-	kprintf("Coremap:\n");
-	for (unsigned int i = 72; i < coremap_size; ++i)
-	{
-		if (coremap[i].p_state == PS_FREE)
-		{
-			break;
-		}
-		kprintf("%d: vaddr:%lx as:%p\n",i,(unsigned long int)coremap[i].va
-			,coremap[i].as);
-	}
-	kprintf("Coremap end\n");
-	printPageTable(curthread->t_addrspace->page_table);
-	spinlock_release(&tlb_lock);
+	// spinlock_acquire(&tlb_lock);
+	// kprintf("Coremap:\n");
+	// for (unsigned int i = 72; i < coremap_size; ++i)
+	// {
+	// 	if (coremap[i].p_state == PS_FREE)
+	// 	{
+	// 		break;
+	// 	}
+	// 	kprintf("%d: vaddr:%lx as:%p\n",i,(unsigned long int)coremap[i].va
+	// 		,coremap[i].as);
+	// }
+	// kprintf("Coremap end\n");
+	// printPageTable(curthread->t_addrspace->page_table);
+	// spinlock_release(&tlb_lock);
 
 	KASSERT(code < NTRAPCODES);
 	switch (code) {
