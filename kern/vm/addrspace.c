@@ -123,7 +123,7 @@ copy_page_table(struct addrspace *newas,
 		memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
 			(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
 		// (*newpt)->permission = oldpt->permission;
-		// (*newpt)->on_disk = oldpt->on_disk;
+		(*newpt)->on_disk = oldpt->on_disk;
 
 		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
 		if (result != 0)
@@ -315,10 +315,15 @@ as_check_regions(struct addrspace *as)
 int page_alloc(struct page_table_entry *pte, struct addrspace *as){
 	KASSERT(pte != NULL);
 	KASSERT(as!=NULL);
+
+	/************ RB:Find page for allocation ************/
+	int clean_index = -1;
+	int dirty_index = -1;
+	spinlock_acquire(&coremap_lock);
 	for (unsigned int i = 0; i < coremap_size; ++i)
 	{
-		spinlock_acquire(&coremap_lock);
 		struct coremap_entry entry = coremap[i];
+
 		if (entry.p_state == PS_FREE)
 		{
 			entry.p_state = PS_DIRTY;
@@ -330,11 +335,62 @@ int page_alloc(struct page_table_entry *pte, struct addrspace *as){
 			pte->paddr = i*PAGE_SIZE;
 			bzero((void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE);
 			return 0;
+		}else if(entry.p_state == PS_CLEAN){
+			if (clean_index == -1)
+			{
+				clean_index = i;
+			}
+		}else{
+			if (dirty_index  == -1)
+			{
+				dirty_index = i;
+			}
 		}
-		spinlock_release(&coremap_lock);
 
 	}
-	return ENOMEM;
+
+	// TODO : Find the pte entry for the page that is bein evicted out vaddr in its address space
+	struct coremap_entry evict_page;
+	if (clean_index != -1)
+	{
+		evict_page = coremap[clean_index];
+
+		spinlock_acquire(&(evict_page.as->as_spinlock));
+		struct page_table_entry ev_pte = getPTE(evict_page.as->page_table,evict_page.va);
+		KASSERT(ev_pte != NULL);
+		KASSERT(ev_pte->on_disk == true);
+		ev_pte->paddr = 0;
+		spinlock_release(&(evict_page.as->as_spinlock));
+
+
+	}else{
+		KASSERT(dirty_index != -1);
+		evict_page = coremap[dirty_index];
+
+		spinlock_acquire(&(evict_page.as->as_spinlock));
+		struct page_table_entry ev_pte = getPTE(evict_page.as->page_table,evict_page.va);
+		KASSERT(ev_pte != NULL);
+		KASSERT(ev_pte->on_disk == false);
+		ev_pte->paddr= 0;
+
+		//swap out
+		ev_pte->on_disk == true;
+		spinlock_release(&(evict_page.as->as_spinlock));
+
+	}
+
+
+
+	if (pte->on_disk == true)
+	{
+		//swap in
+	}else{
+
+	}
+
+	spinlock_release(&coremap_lock);
+
+	return 0;
 }
 
 void page_free(struct page_table_entry *pte){
@@ -365,7 +421,7 @@ addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 	}
 	new_entry->vaddr = vaddr & PAGE_FRAME;
 	new_entry->paddr = paddr;
-	// new_entry->on_disk = false;
+	new_entry->on_disk = false;
 	new_entry->next = NULL;
 	// new_entry->permission = 0;
 

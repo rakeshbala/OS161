@@ -44,9 +44,10 @@
 // #define DUMBVM_STACKPAGES    12
 
 /*
- * Wrap rma_stealmem in a spinlock.
+ * Wrap ram_stealmem in a spinlock.
  */
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
+static char page_buffer[PAGE_SIZE];
 
 void
 vm_bootstrap(void)
@@ -219,6 +220,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			{
 				return EFAULT;
 			}
+			region_perm = region_perm & AX_READ;
 			break;
 		case VM_FAULT_WRITE:
 			if (!((region_perm & AX_WRITE) == AX_WRITE))
@@ -231,6 +233,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 
 	/************ RB:Check if page fault ************/
+	spinlock_acquire(&as->as_spinlock);
 	struct page_table_entry *pte = getPTE(as->page_table,faultaddress);
 	if (pte == NULL)
 	{
@@ -241,11 +244,19 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}
 	}
 
+	/************ RB:Check if in memory ************/
 	if (pte->paddr == 0)
 	{
 		/************ RB:Allocate since it is page fault ************/
 		result = page_alloc(pte,as);
 		if (result !=0) return ENOMEM;
+	}
+	spinlock_release(&as->as_spinlock);
+
+
+	if (region_perm & AX_WRITE == AX_WRITE)
+	{
+		pte->on_disk = false;
 	}
 
 
