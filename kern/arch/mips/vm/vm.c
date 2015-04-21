@@ -332,3 +332,43 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 	return false;
 }
 
+/*********** RR: swap into a normal file of disk ***********/
+int
+swap_out(vaddr_t va,addrspace as)
+{
+    if (swap_node == NULL)
+    {    
+        //locks for swapnode and array
+        int err = vfs_open("lhd0raw:",O_RDWR,0,&swap_node);
+        if(err != 0)
+        {
+            return err;
+        }    
+    }
+ 
+    // use va,as to search for index of array to write to disc, use index*pagesize,  
+    int darray_index = 0;
+    int any_null = 0;
+    int found = 0;
+    
+    for (; darray_index < 2000, darray_index++)
+    {
+        if(disk_array[darray_index]!=NULL)
+        {
+            if ((disk_array[darray_index].va == va) &&  
+                (disk_array[darray_index].as == as))
+            {
+                found = darray_index;
+                break;
+            }
+        }
+        else any_null = darray_index;
+    }
+    if(found)
+    {
+ 
+    }
+ 
+    return 0;
+}
+

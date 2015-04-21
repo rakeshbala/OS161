@@ -49,8 +49,6 @@
 
 /************ RB:Coremap Declarations ************/
 
-
-
 struct coremap_entry
 {
 	page_state p_state;
@@ -66,8 +64,25 @@ bool vm_is_bootstrapped ;
 unsigned int coremap_size;
 unsigned int search_start;
 
+/*********** RR: Swap Structures ***********/
 
 struct spinlock tlb_lock;
+
+struct swap_key
+{
+    vaddr_t va;
+    addrspace as;
+};
+ 
+struct coremap_entry
+{
+    page_state p_state;
+    int chunk_size;
+ 
+    struct addrspace *as;
+    vaddr_t va;
+};
+
 
 
 /* Initialization function */
