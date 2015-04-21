@@ -38,7 +38,7 @@
 #include <vm.h>
 #include "vm_enum.h"
 #include "opt-dumbvm.h"
-
+#include <wchan.h>
 struct vnode;
 
 
@@ -47,11 +47,17 @@ struct vnode;
  * space of a process.
  *
  */
+
+struct state_field {
+    int pte_lock_ondisk:2;
+    int swap_index:11;
+};
+
 struct page_table_entry{
   vaddr_t vaddr;
   paddr_t paddr;
   // ax_permssion permission;
-  bool on_disk;
+  struct state_field pte_state;
   struct page_table_entry * next;
 };
 
@@ -78,6 +84,7 @@ struct addrspace {
         vaddr_t heap_start;
         vaddr_t heap_end;
         vaddr_t stack_end;
+        struct wchan *swap_wc;
 #endif
 };
 

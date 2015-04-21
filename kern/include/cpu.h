@@ -93,7 +93,7 @@ struct cpu {
 
 /*
  * Initialization functions.
- * 
+ *
  * cpu_create creates a cpu; it is suitable for calling from driver-
  * or bus-specific code that looks for secondary CPUs.
  *
@@ -166,6 +166,8 @@ void cpu_halt(void);
 void ipi_send(struct cpu *target, int code);
 void ipi_broadcast(int code);
 void ipi_tlbshootdown(struct cpu *target, const struct tlbshootdown *mapping);
+
+int allcpu_tlbshootdown(vaddr_t vaddr);
 
 void interprocessor_interrupt(void);
 

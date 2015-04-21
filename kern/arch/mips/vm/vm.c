@@ -38,7 +38,8 @@
 #include <addrspace.h>
 #include <vm.h>
 #include <synch.h>
-
+#include <wchan.h>
+#include <cpu.h>
 
 /* under dumbvm, always have 48k of user stack */
 // #define DUMBVM_STACKPAGES    12
@@ -47,7 +48,7 @@
  * Wrap ram_stealmem in a spinlock.
  */
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
-static char page_buffer[PAGE_SIZE];
+// static char page_buffer[PAGE_SIZE];
 
 void
 vm_bootstrap(void)
@@ -185,8 +186,13 @@ vm_tlbshootdown_all(void)
 void
 vm_tlbshootdown(const struct tlbshootdown *ts)
 {
+
 	(void)ts;
-	panic("dumbvm tried to do tlb shootdown?!\n");
+	int index  = tlb_probe(ts->ts_vaddr,0);
+	if (index > 0)
+	{
+		tlb_write(TLBHI_INVALID(index), TLBLO_INVALID(),index);
+	}
 }
 
 int
@@ -233,7 +239,6 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 
 	/************ RB:Check if page fault ************/
-	spinlock_acquire(&as->as_spinlock);
 	struct page_table_entry *pte = getPTE(as->page_table,faultaddress);
 	if (pte == NULL)
 	{
@@ -244,6 +249,13 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}
 	}
 
+	/************ RB:Prevent access while swapping ************/
+	if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
+	{
+		wchan_sleep(as->swap_wc);
+	}
+
+
 	/************ RB:Check if in memory ************/
 	if (pte->paddr == 0)
 	{
@@ -251,17 +263,16 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		result = page_alloc(pte,as);
 		if (result !=0) return ENOMEM;
 	}
-	spinlock_release(&as->as_spinlock);
-
-
-	if (region_perm & AX_WRITE == AX_WRITE)
-	{
-		pte->on_disk = false;
-	}
-
 
 	/* make sure it's page-aligned */
 	KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
+
+	if ((region_perm & AX_WRITE) == AX_WRITE)
+	{
+		pte->pte_state.pte_lock_ondisk &= ~(PTE_ONDISK); //set ON disk as false
+		int c_index = pte->paddr/PAGE_SIZE;
+		coremap[c_index].p_state = PS_DIRTY; //might need to lock
+	}
 
 	/* Disable interrupts on this CPU while frobbing the TLB. */
 	spl = splhigh();
@@ -320,3 +331,4 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 	*perm = 0;
 	return false;
 }
+

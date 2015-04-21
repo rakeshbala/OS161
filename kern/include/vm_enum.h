@@ -12,7 +12,13 @@ typedef enum {
 	PS_FREE,
 	PS_FIXED,
 	PS_CLEAN,
-	PS_DIRTY
+	PS_DIRTY,
+	PS_VICTIM
 } page_state;
+
+typedef enum{
+	PTE_ONDISK = 1,
+	PTE_LOCKED = 2
+} pte_state;
 
 #endif
