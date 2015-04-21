@@ -120,24 +120,34 @@ copy_page_table(struct addrspace *newas,
 			return ENOMEM;
 		}
 		(*newpt)->vaddr = oldpt->vaddr;
-		int result = page_alloc(*newpt, newas);
-		if (result != 0)
+		if (oldpt->paddr == 0)
 		{
-			kfree(*newpt);
-			return ENOMEM;
+			if (oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK == PTE_ONDISK)
+			{
+				//copy from disk into buffer
+				//copy from buffer into disk
+			}else{
+				(*newpt)->paddr = 0;
+			}
+		}else{
+			int result = page_alloc(*newpt, newas);
+			if (result != 0)
+			{
+				kfree(*newpt);
+				return ENOMEM;
+			}
+			memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
+				(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
+			(*newpt)->pte_state = oldpt->pte_state;
+			result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
+			if (result != 0)
+			{
+				page_free(*newpt);
+				kfree(*newpt);
+				return ENOMEM;
+			}
 		}
-		memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
-			(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
-		// (*newpt)->permission = oldpt->permission;
-		(*newpt)->pte_state = oldpt->pte_state;
 
-		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
-		if (result != 0)
-		{
-			page_free(*newpt);
-			kfree(*newpt);
-			return ENOMEM;
-		}
 		return 0;
 	}
 }
