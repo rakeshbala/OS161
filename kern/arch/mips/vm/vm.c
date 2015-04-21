@@ -40,6 +40,11 @@
 #include <synch.h>
 #include <wchan.h>
 #include <cpu.h>
+#include <vfs.h>
+#include <kern/fcntl.h>
+#include <kern/iovec.h>
+#include <uio.h>
+#include <vnode.h>
 
 /* under dumbvm, always have 48k of user stack */
 // #define DUMBVM_STACKPAGES    12
@@ -48,8 +53,10 @@
  * Wrap ram_stealmem in a spinlock.
  */
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
-// static char page_buffer[PAGE_SIZE];
 
+// static char page_buffer[PAGE_SIZE];
+static char swapped_pages[MAX_SWAP_PG_NUM];
+static struct vnode *swap_node;
 void
 vm_bootstrap(void)
 {
@@ -57,6 +64,12 @@ vm_bootstrap(void)
 	spinlock_init(&coremap_lock);
 	spinlock_init(&tlb_lock);
 	// dbflags = dbflags | DB_VM;
+	//
+	/************ RB:Init swap page array ************/
+	for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
+	{
+		swapped_pages[i]='U';
+	}
 	/************ RB:Accomodate for last address misalignment ************/
 	paddr_t fpaddr,lpaddr;
 	ram_getsize(&fpaddr,&lpaddr);
@@ -186,13 +199,13 @@ vm_tlbshootdown_all(void)
 void
 vm_tlbshootdown(const struct tlbshootdown *ts)
 {
-
-	(void)ts;
+	int x = splhigh();
 	int index  = tlb_probe(ts->ts_vaddr,0);
 	if (index > 0)
 	{
 		tlb_write(TLBHI_INVALID(index), TLBLO_INVALID(),index);
 	}
+	splx(x);
 }
 
 int
@@ -239,10 +252,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 
 	/************ RB:Check if page fault ************/
-	struct page_table_entry *pte = getPTE(as->page_table,faultaddress);
+	struct page_table_entry *pte = get_pte(as->page_table,faultaddress);
 	if (pte == NULL)
 	{
-		pte = addPTE(as, faultaddress, 0);
+		pte = add_pte(as, faultaddress, 0);
 		if (pte == NULL)
 		{
 			return ENOMEM;
@@ -286,7 +299,13 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
 
 	// spinlock_acquire(&tlb_lock);
-	tlb_random(ehi, elo);
+	int index = tlb_probe(ehi,0);
+	if (index > 0)
+	{
+		tlb_write(ehi,elo,index);
+	}else{
+		tlb_random(ehi, elo);
+	}
 	// spinlock_release(&tlb_lock);
 	splx(spl);
 	return 0;
@@ -334,41 +353,47 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 
 /*********** RR: swap into a normal file of disk ***********/
 int
-swap_out(vaddr_t va,addrspace as)
+swap_out(vaddr_t va,struct addrspace *as)
 {
     if (swap_node == NULL)
-    {    
+    {
         //locks for swapnode and array
-        int err = vfs_open("lhd0raw:",O_RDWR,0,&swap_node);
+        int err = vfs_open((char *)"lhd0raw:",O_RDWR,0,&swap_node);
         if(err != 0)
         {
             return err;
-        }    
-    }
- 
-    // use va,as to search for index of array to write to disc, use index*pagesize,  
-    int darray_index = 0;
-    int any_null = 0;
-    int found = 0;
-    
-    for (; darray_index < 2000, darray_index++)
-    {
-        if(disk_array[darray_index]!=NULL)
-        {
-            if ((disk_array[darray_index].va == va) &&  
-                (disk_array[darray_index].as == as))
-            {
-                found = darray_index;
-                break;
-            }
         }
-        else any_null = darray_index;
     }
-    if(found)
+
+    struct page_table_entry* pte = get_pte(as->page_table,va);
+    KASSERT(pte != NULL);
+
+    if (pte->pte_state.swap_index < 0)
     {
- 
+    	for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
+    	{
+    		if (swapped_pages[i] == 'U')
+    		{
+    			pte->pte_state.swap_index = i;
+    			swapped_pages[i] = 'A';
+    			break;
+    		}
+    	}
+    	if (pte->pte_state.swap_index > MAX_SWAP_PG_NUM)
+    	{
+    		return ENOMEM;
+    	}
     }
- 
+
+    //locks
+  	struct iovec iov;
+	struct uio ku;
+	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
+		pte->pte_state.swap_index*PAGE_SIZE, UIO_WRITE);
+    int result = VOP_WRITE(swap_node, &ku);
+    if (result)
+    {
+    	return result;
+    }
     return 0;
 }
-

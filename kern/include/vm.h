@@ -46,6 +46,7 @@
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 
+#define MAX_SWAP_PG_NUM 2000
 
 /************ RB:Coremap Declarations ************/
 
@@ -71,16 +72,7 @@ struct spinlock tlb_lock;
 struct swap_key
 {
     vaddr_t va;
-    addrspace as;
-};
- 
-struct coremap_entry
-{
-    page_state p_state;
-    int chunk_size;
- 
     struct addrspace *as;
-    vaddr_t va;
 };
 
 
@@ -101,4 +93,6 @@ void free_kpages(vaddr_t addr);
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
+int swap_out(vaddr_t va,struct addrspace *as);
+int swap_in(vaddr_t va,struct addrspace *as);
 #endif /* _VM_H_ */

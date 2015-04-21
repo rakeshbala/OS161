@@ -50,7 +50,7 @@ struct vnode;
 
 struct state_field {
     int pte_lock_ondisk:2;
-    int swap_index:11;
+    int swap_index:12;
 };
 
 struct page_table_entry{
@@ -153,11 +153,11 @@ int page_alloc (struct page_table_entry* pte, struct addrspace *as);
 void page_free(struct page_table_entry *pte);
 
 /************ RB:Page table and region linked list functions ************/
-struct page_table_entry *addPTE(struct addrspace* as, vaddr_t vaddr, paddr_t paddr);
-struct page_table_entry *getPTE(struct page_table_entry* page_table, vaddr_t vaddr);
+struct page_table_entry *add_pte(struct addrspace* as, vaddr_t vaddr, paddr_t paddr);
+struct page_table_entry *get_pte(struct page_table_entry* page_table, vaddr_t vaddr);
 
-struct region_entry *addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x);
-struct region_entry *getRegion(struct region_entry* regions, vaddr_t vaddr);
+struct region_entry *add_region(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x);
+struct region_entry *get_region(struct region_entry* regions, vaddr_t vaddr);
 void printPageTable(struct page_table_entry *entry);
 
 #endif /* _ADDRSPACE_H_ */

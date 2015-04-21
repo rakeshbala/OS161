@@ -122,7 +122,7 @@ copy_page_table(struct addrspace *newas,
 		(*newpt)->vaddr = oldpt->vaddr;
 		if (oldpt->paddr == 0)
 		{
-			if (oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK == PTE_ONDISK)
+			if ((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
 			{
 				//copy from disk into buffer
 				//copy from buffer into disk
@@ -221,11 +221,9 @@ as_activate(struct addrspace *as)
 	(void)as;
 	/* Disable interrupts on this CPU while frobbing the TLB. */
 	spl = splhigh();
-	spinlock_acquire(&tlb_lock);
 	for (i=0; i<NUM_TLB; i++) {
 		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
-	spinlock_release(&tlb_lock);
 	splx(spl);
 }
 
@@ -254,7 +252,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 
 	/* ...and now the length. */
 	sz = (sz + PAGE_SIZE - 1) & PAGE_FRAME;
-	struct region_entry * region = addRegion(as, vaddr,sz,readable,
+	struct region_entry * region = add_region(as, vaddr,sz,readable,
 		writeable,executable);
 	if (region == NULL)
 	{
@@ -378,7 +376,7 @@ int page_alloc(struct page_table_entry *pte, struct addrspace *as){
 
 	/************ RB:Check if selected clean or dirty page to decide swap out ************/
 	struct coremap_entry evict_page = coremap[s_index];
-	struct page_table_entry *ev_pte = getPTE(evict_page.as->page_table,evict_page.va);
+	struct page_table_entry *ev_pte = get_pte(evict_page.as->page_table,evict_page.va);
 	KASSERT(ev_pte != NULL);
 	KASSERT((ev_pte->pte_state.pte_lock_ondisk & PTE_LOCKED) != PTE_LOCKED);
 	ev_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED;//lock pte
@@ -438,7 +436,7 @@ void page_free(struct page_table_entry *pte){
 
 /************ RB:Add page table entry to the page table ************/
 struct page_table_entry *
-addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
+add_pte(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 {
 
 	KASSERT(as != NULL);
@@ -450,7 +448,7 @@ addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 	new_entry->vaddr = vaddr & PAGE_FRAME;
 	new_entry->paddr = paddr;
 	new_entry->pte_state.pte_lock_ondisk = 0;
-	new_entry->pte_state.swap_index = 2001;
+	new_entry->pte_state.swap_index = -1;
 	new_entry->next = NULL;
 	// new_entry->permission = 0;
 
@@ -471,7 +469,7 @@ addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 
 /************ RB: Get page table entry based on passed in vaddr ************/
 struct page_table_entry *
-getPTE(struct page_table_entry* page_table, vaddr_t vaddr)
+get_pte(struct page_table_entry* page_table, vaddr_t vaddr)
 {
 	struct page_table_entry *navig_entry = page_table;
 	bool found = false;
@@ -489,7 +487,7 @@ getPTE(struct page_table_entry* page_table, vaddr_t vaddr)
 }
 
 /************ RB: Add region to the regions linked list ************/
-struct region_entry * addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x)
+struct region_entry * add_region(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x)
 {
 	struct region_entry *new_entry = kmalloc(sizeof(struct region_entry));;
 	if (new_entry == NULL)
@@ -517,7 +515,7 @@ struct region_entry * addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,in
 }
 
 /************ RB: Get region based on passed in vaddr ************/
-struct region_entry * getRegion(struct region_entry* regions, vaddr_t vaddr)
+struct region_entry * get_region(struct region_entry* regions, vaddr_t vaddr)
 {
 	KASSERT(regions != NULL);
 	struct region_entry *new_entry = regions;
