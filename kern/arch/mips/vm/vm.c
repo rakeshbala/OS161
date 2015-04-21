@@ -39,6 +39,12 @@
 #include <vm.h>
 #include <synch.h>
 #include <wchan.h>
+#include <kern/fcntl.h>
+#include <kern/iovec.h>
+#include <uio.h>
+#include <vfs.h>
+#include <vnode.h>
+
 
 /* under dumbvm, always have 48k of user stack */
 // #define DUMBVM_STACKPAGES    12
@@ -47,6 +53,8 @@
  * Wrap rma_stealmem in a spinlock.
  */
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
+static struct vnode *swap_node;
+static char swapped_pages[MAX_SWAP_PG_NUM];
 
 void
 vm_bootstrap(void)
@@ -323,4 +331,49 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 
 	*perm = 0;
 	return false;
+}
+
+int
+swap_out(vaddr_t va,struct addrspace *as)
+{
+    if (swap_node == NULL)
+    {
+        int err = vfs_open((char *)"lhd0raw:",O_RDWR,0,&swap_node);
+        if(err != 0)
+        {
+            return err;
+        }
+    }
+
+    struct page_table_entry* pte = get_pte(as->page_table,va);
+    KASSERT(pte != NULL);
+
+    if (pte->pte_state.swap_index < 0)
+    {
+    	for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
+    	{
+    		if (swapped_pages[i] == 'U')
+    		{
+    			pte->pte_state.swap_index = i;
+    			swapped_pages[i] = 'A';
+    			break;
+    		}
+    	}
+    	if (pte->pte_state.swap_index > MAX_SWAP_PG_NUM)
+    	{
+    		return ENOMEM;
+    	}
+    }
+
+    //locks
+  	struct iovec iov;
+	struct uio ku;
+	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
+		pte->pte_state.swap_index*PAGE_SIZE, UIO_WRITE);
+    int result = VOP_WRITE(swap_node, &ku);
+    if (result)
+    {
+    	return result;
+    }
+    return 0;
 }

@@ -38,6 +38,7 @@
 #include <addrspace.h>
 #include <vm.h>
 #include <wchan.h>
+#include <cpu.h>
 // /*
 //  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
 //  * assignment, this file is not compiled or linked or in any way
@@ -47,6 +48,7 @@
 int copy_page_table(struct addrspace *newas,
 	struct page_table_entry *oldpt, struct page_table_entry **newpt);
 int copy_regions(struct region_entry *old_regions, struct region_entry **new_region);
+int evict_page(int c_index, page_state pstate);
 
 struct addrspace *
 as_create(void)
@@ -317,6 +319,7 @@ as_check_regions(struct addrspace *as)
 	KASSERT (as->stack_end != 0);
 }
 
+/************ RB:User page allocation. Always returns a PS_VICTIM page ************/
 int
 page_alloc(struct page_table_entry *pte, struct addrspace *as){
 
@@ -369,18 +372,21 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as){
  	}
 	coremap[s_index].p_state = PS_VICTIM;
 	spinlock_release(&coremap_lock);
+	kfree(clean_index);
+	kfree(dirty_index);
 
-	//comms - Make swap decisions
-
+	// Make  decisions victim page
+	int result = evict_page(s_index, pstate);
+	if (result)
+	{
+		return result;
+	}
 
 	coremap[s_index].chunk_size = 1;
 	coremap[s_index].va = pte->vaddr & PAGE_FRAME;
 	coremap[s_index].as = as;
-	//set page state to something other than victim
 	pte->paddr = s_index*PAGE_SIZE;
 	bzero((void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE);
-	kfree(clean_index);
-	kfree(dirty_index);
 	return 0;
 }
 
@@ -395,9 +401,40 @@ void page_free(struct page_table_entry *pte){
 		coremap[core_index].p_state = PS_FREE;
 		spinlock_release(&coremap_lock);
 	}
-
 }
 
+int evict_page(int c_index, page_state pstate)
+{
+	/************ RB:Clear the easy cases first ************/
+	if (pstate == PS_FREE)
+	{
+		return 0;
+	}else if(pstate != PS_CLEAN || pstate != PS_DIRTY){
+		panic("Selected a non selectable page");
+		return EINVAL;
+	}
+	/************ RB:On to swapping decisions ************/
+	int result = allcpu_tlbshootdown(coremap[c_index].va);
+	if (result)
+	{
+		panic("TLB shootdown failed");
+		return result;
+	}
+
+	struct page_table_entry *evict_pte = get_pte(coremap[c_index].as->page_table,
+		coremap[c_index].va);
+	KASSERT(evict_pte != NULL);
+	if (pstate == PS_DIRTY)
+	{
+		evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
+		//swap out
+		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
+		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
+	}
+	KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
+	evict_pte->paddr = 0;
+	return 0;
+}
 
 /************ RB:Add page table entry to the page table ************/
 struct page_table_entry *
