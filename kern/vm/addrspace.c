@@ -409,15 +409,15 @@ int evict_page(int c_index, page_state pstate)
 	if (pstate == PS_FREE)
 	{
 		return 0;
-	}else if(pstate != PS_CLEAN || pstate != PS_DIRTY){
-		panic("Selected a non selectable page");
+	}else if(pstate != PS_CLEAN && pstate != PS_DIRTY){
+		panic("Selected a non selectable page\n");
 		return EINVAL;
 	}
 	/************ RB:On to swapping decisions ************/
 	int result = allcpu_tlbshootdown(coremap[c_index].va);
 	if (result)
 	{
-		panic("TLB shootdown failed");
+		panic("TLB shootdown failed\n");
 		return result;
 	}
 

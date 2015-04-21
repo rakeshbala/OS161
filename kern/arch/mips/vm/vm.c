@@ -266,6 +266,16 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		result = page_alloc(pte,as);
 		if (result !=0) return ENOMEM;
 	}
+	KASSERT(pte->paddr != 0);
+	int core_index = pte->paddr/PAGE_SIZE;
+	if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
+	{
+		//swap in
+		coremap[core_index].p_state = PS_CLEAN;
+	}else{
+		coremap[core_index].p_state = PS_DIRTY;
+	}
+
 
 
 	/* make sure it's page-aligned */
@@ -276,6 +286,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	ehi = faultaddress;
 	if ((region_perm & AX_WRITE) == AX_WRITE)
 	{
+		coremap[core_index].p_state = PS_DIRTY;
 		elo = pte->paddr | TLBLO_DIRTY | TLBLO_VALID;
 	}else{
 		elo = pte->paddr|TLBLO_VALID;
