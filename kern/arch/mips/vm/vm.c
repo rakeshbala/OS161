@@ -38,7 +38,7 @@
 #include <addrspace.h>
 #include <vm.h>
 #include <synch.h>
-
+#include <wchan.h>
 
 /* under dumbvm, always have 48k of user stack */
 // #define DUMBVM_STACKPAGES    12
@@ -53,7 +53,6 @@ vm_bootstrap(void)
 {
 
 	spinlock_init(&coremap_lock);
-	spinlock_init(&tlb_lock);
 	// dbflags = dbflags | DB_VM;
 	/************ RB:Accomodate for last address misalignment ************/
 	paddr_t fpaddr,lpaddr;
@@ -184,8 +183,13 @@ vm_tlbshootdown_all(void)
 void
 vm_tlbshootdown(const struct tlbshootdown *ts)
 {
-	(void)ts;
-	panic("dumbvm tried to do tlb shootdown?!\n");
+	int x = splhigh();
+	int index  = tlb_probe(ts->ts_vaddr,0);
+	if (index > 0)
+	{
+		tlb_write(TLBHI_INVALID(index), TLBLO_INVALID(),index);
+	}
+	splx(x);
 }
 
 int
@@ -219,6 +223,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			{
 				return EFAULT;
 			}
+			region_perm &= AX_READ;
 			break;
 		case VM_FAULT_WRITE:
 			if (!((region_perm & AX_WRITE) == AX_WRITE))
@@ -231,14 +236,20 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 
 	/************ RB:Check if page fault ************/
-	struct page_table_entry *pte = getPTE(as->page_table,faultaddress);
+	struct page_table_entry *pte = get_pte(as->page_table,faultaddress);
 	if (pte == NULL)
 	{
-		pte = addPTE(as, faultaddress, 0);
+		pte = add_pte(as, faultaddress, 0);
 		if (pte == NULL)
 		{
 			return ENOMEM;
 		}
+	}
+	/************ RB:Prevent access while swapping ************/
+	if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
+	{
+		wchan_lock(as->swap_wc);
+		wchan_sleep(as->swap_wc);
 	}
 
 	if (pte->paddr == 0)
@@ -263,9 +274,13 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
 
-	// spinlock_acquire(&tlb_lock);
-	tlb_random(ehi, elo);
-	// spinlock_release(&tlb_lock);
+	int index = tlb_probe(ehi,0);
+	if (index > 0)
+	{
+		tlb_write(ehi,elo,index);
+	}else{
+		tlb_random(ehi, elo);
+	}
 	splx(spl);
 	return 0;
 }

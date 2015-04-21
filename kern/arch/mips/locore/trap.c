@@ -103,7 +103,7 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 	kprintf("----\n");
 	splx(x);
 
-	// printPageTable(curthread->t_addrspace->page_table);
+	// print_page_table(curthread->t_addrspace->page_table);
 	// spinlock_release(&tlb_lock);
 
 	KASSERT(code < NTRAPCODES);

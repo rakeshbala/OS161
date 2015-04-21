@@ -37,6 +37,7 @@
 #include <mips/tlb.h>
 #include <addrspace.h>
 #include <vm.h>
+#include <wchan.h>
 // /*
 //  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
 //  * assignment, this file is not compiled or linked or in any way
@@ -62,6 +63,11 @@ as_create(void)
 	as->regions = NULL;
 	as->stack_end = USERSTACK;
 	as->page_table = NULL;
+	as->swap_wc = wchan_create("swap");
+	if (as->swap_wc == NULL)
+	{
+		return NULL;
+	}
 	return as;
 }
 
@@ -114,6 +120,7 @@ copy_page_table(struct addrspace *newas,
 			return ENOMEM;
 		}
 		(*newpt)->vaddr = oldpt->vaddr;
+		(*newpt)->pte_state = oldpt->pte_state;
 		int result = page_alloc(*newpt, newas);
 		if (result != 0)
 		{
@@ -136,7 +143,7 @@ copy_page_table(struct addrspace *newas,
 	}
 }
 
-void printPageTable(struct page_table_entry *page_table){
+void print_page_table(struct page_table_entry *page_table){
 	while(page_table != NULL){
 		kprintf("vaddr: %lx paddr:%lx\n",(unsigned long int)page_table->vaddr,
 			(unsigned long int) page_table->paddr);
@@ -205,11 +212,9 @@ as_activate(struct addrspace *as)
 	(void)as;
 	/* Disable interrupts on this CPU while frobbing the TLB. */
 	spl = splhigh();
-	spinlock_acquire(&tlb_lock);
 	for (i=0; i<NUM_TLB; i++) {
 		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
 	}
-	spinlock_release(&tlb_lock);
 	splx(spl);
 }
 
@@ -238,7 +243,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 
 	/* ...and now the length. */
 	sz = (sz + PAGE_SIZE - 1) & PAGE_FRAME;
-	struct region_entry * region = addRegion(as, vaddr,sz,readable,
+	struct region_entry * region = add_region(as, vaddr,sz,readable,
 		writeable,executable);
 	if (region == NULL)
 	{
@@ -312,29 +317,71 @@ as_check_regions(struct addrspace *as)
 	KASSERT (as->stack_end != 0);
 }
 
-int page_alloc(struct page_table_entry *pte, struct addrspace *as){
-	KASSERT(pte != NULL);
-	KASSERT(as!=NULL);
+int
+page_alloc(struct page_table_entry *pte, struct addrspace *as){
+
+/************ RB:Find page for allocation ************/
+	int book_size = coremap_size-search_start;
+	page_state pstate = 0;
+	int *clean_index = (int *)kmalloc(book_size * sizeof(int));
+	if (clean_index == NULL)
+	{
+		return ENOMEM;
+	}
+	int clean_count = 0;
+	int *dirty_index = (int *)kmalloc(book_size * sizeof(int));
+	if (dirty_index == NULL)
+	{
+		return ENOMEM;
+	}
+	int dirty_count = 0;
+	int s_index = -1;
+
+	spinlock_acquire(&coremap_lock);
 	for (unsigned int i = 0; i < coremap_size; ++i)
 	{
-		spinlock_acquire(&coremap_lock);
-		struct coremap_entry entry = coremap[i];
-		if (entry.p_state == PS_FREE)
+		if (coremap[i].p_state == PS_FREE)
 		{
-			entry.p_state = PS_DIRTY;
-			entry.chunk_size = 1;
-			entry.va = pte->vaddr & PAGE_FRAME;
-			entry.as = as;
-			coremap[i] = entry;
-			spinlock_release(&coremap_lock);
-			pte->paddr = i*PAGE_SIZE;
-			bzero((void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE);
-			return 0;
+			s_index = i;
+			pstate = PS_FREE;
+			break;
+		 }else if(coremap[i].p_state == PS_CLEAN){
+			clean_index[clean_count]=i;
+			clean_count++;
+		}else if(coremap[i].p_state == PS_DIRTY){
+			dirty_index[dirty_count]=i;
+			dirty_count++;
 		}
-		spinlock_release(&coremap_lock);
+		// spinlock_release(&coremap_lock);
 
-	}
-	return ENOMEM;
+ 	}
+ 	if (s_index == -1)
+ 	{
+ 		if (clean_count > 0)
+ 		{
+ 			s_index = random()%clean_count;
+ 			pstate = PS_CLEAN;
+ 		}else{
+ 			KASSERT(dirty_count > 0);
+ 			s_index = random()%dirty_count;
+ 			pstate = PS_DIRTY;
+ 		}
+ 	}
+	coremap[s_index].p_state = PS_VICTIM;
+	spinlock_release(&coremap_lock);
+
+	//comms - Make swap decisions
+
+
+	coremap[s_index].chunk_size = 1;
+	coremap[s_index].va = pte->vaddr & PAGE_FRAME;
+	coremap[s_index].as = as;
+	//set page state to something other than victim
+	pte->paddr = s_index*PAGE_SIZE;
+	bzero((void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE);
+	kfree(clean_index);
+	kfree(dirty_index);
+	return 0;
 }
 
 void page_free(struct page_table_entry *pte){
@@ -354,7 +401,7 @@ void page_free(struct page_table_entry *pte){
 
 /************ RB:Add page table entry to the page table ************/
 struct page_table_entry *
-addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
+add_pte(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 {
 
 	KASSERT(as != NULL);
@@ -367,6 +414,8 @@ addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 	new_entry->paddr = paddr;
 	// new_entry->on_disk = false;
 	new_entry->next = NULL;
+	new_entry->pte_state.pte_lock_ondisk = 0;
+	new_entry->pte_state.swap_index = -1;
 	// new_entry->permission = 0;
 
 	if (as->page_table == NULL)
@@ -386,7 +435,7 @@ addPTE(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 
 /************ RB: Get page table entry based on passed in vaddr ************/
 struct page_table_entry *
-getPTE(struct page_table_entry* page_table, vaddr_t vaddr)
+get_pte(struct page_table_entry* page_table, vaddr_t vaddr)
 {
 	struct page_table_entry *navig_entry = page_table;
 	bool found = false;
@@ -404,7 +453,7 @@ getPTE(struct page_table_entry* page_table, vaddr_t vaddr)
 }
 
 /************ RB: Add region to the regions linked list ************/
-struct region_entry * addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x)
+struct region_entry * add_region(struct addrspace* as, vaddr_t rbase,size_t sz,int r,int w,int x)
 {
 	struct region_entry *new_entry = kmalloc(sizeof(struct region_entry));;
 	if (new_entry == NULL)
@@ -432,7 +481,7 @@ struct region_entry * addRegion(struct addrspace* as, vaddr_t rbase,size_t sz,in
 }
 
 /************ RB: Get region based on passed in vaddr ************/
-struct region_entry * getRegion(struct region_entry* regions, vaddr_t vaddr)
+struct region_entry * get_region(struct region_entry* regions, vaddr_t vaddr)
 {
 	KASSERT(regions != NULL);
 	struct region_entry *new_entry = regions;
