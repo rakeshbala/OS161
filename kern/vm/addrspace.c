@@ -131,7 +131,7 @@ copy_page_table(struct addrspace *newas,
 			return ENOMEM;
 		}
 		(*newpt)->vaddr = oldpt->vaddr;
-		(*newpt)->pte_state.pte_lock_ondisk = oldpt->pte_state.pte_lock_ondisk;
+		(*newpt)->pte_state.pte_lock_ondisk = 0;
 		int result;
 		if (oldpt->paddr != 0 )
 		{
@@ -144,6 +144,9 @@ copy_page_table(struct addrspace *newas,
 			KASSERT((*newpt)->paddr != 0);
 			memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
 				(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
+			coremap[(*newpt)->paddr/PAGE_SIZE].p_state = PS_DIRTY;
+		}else{
+			(*newpt)->paddr = 0;
 		}
 
 		if ((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
@@ -191,10 +194,12 @@ copy_page_table(struct addrspace *newas,
 				return result;
 			}
 			lock_release(swap_lock);
+			(*newpt)->pte_state.pte_lock_ondisk |= PTE_ONDISK;
+			if((*newpt)->paddr !=0 ){
+				coremap[(*newpt)->paddr/PAGE_SIZE].p_state = PS_CLEAN;
+			}
 
 		}
-		// (*newpt)->permission = oldpt->permission;
-		// (*newpt)->on_disk = oldpt->on_disk;
 
 		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
 		if (result != 0)
@@ -417,12 +422,10 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as){
 			dirty_index[dirty_count]=i;
 			dirty_count++;
 		}
-		// spinlock_release(&coremap_lock);
-
  	}
  	if (s_index == -1)
  	{
- 		if (clean_count > 0)
+ 		if (clean_count > 5)
  		{
  			s_index = clean_index[random()%clean_count];
  			pstate = PS_CLEAN;
@@ -501,7 +504,7 @@ int evict_page(int c_index, page_state pstate)
 		int result = swap_out(ev_vaddr, ev_as);
 		if (result)
 		{
-			panic("Swap space exhausted\n");
+			panic("Swap space exhausted\n" );
 		}
 		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;

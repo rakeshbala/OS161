@@ -312,7 +312,7 @@ sys_sbrk(intptr_t amount,struct addrspace* as,int *returnVal)
 		{
 			*returnVal = as->heap_end;
 			as->heap_end = new_heap;
-			kprintf("Heap moved to %lx\n",(long unsigned int)as->heap_end);
+			// kprintf("Heap moved to %lx\n",(long unsigned int)as->heap_end);
 			return 0;
 		}else{
 			return ENOMEM;

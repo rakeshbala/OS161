@@ -148,7 +148,7 @@ alloc_kpages(int npages)
 					for (int j = 0; j < npages; ++j)
 					{
 						victims[j]=coremap[i+j].p_state;
-						coremap[i+j].p_state = PS_FIXED;
+						coremap[i+j].p_state = PS_VICTIM;
 					}
 					break;
 				}
@@ -170,6 +170,7 @@ alloc_kpages(int npages)
 			{
 				return 0;
 			}
+			coremap[i].p_state = PS_FIXED;
 			coremap[i].chunk_size = npages;
 			coremap[i].va = PADDR_TO_KVADDR(pa);
 			coremap[i].as = NULL;
@@ -306,11 +307,8 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		 	coremap[core_index].p_state = PS_DIRTY;
 		}
 	}
-
-	KASSERT(coremap[pte->paddr/PAGE_SIZE].p_state != PS_VICTIM);
-
-
 	int core_index = pte->paddr/PAGE_SIZE;
+	KASSERT(coremap[core_index].p_state != PS_VICTIM);
 
 	/* make sure it's page-aligned */
 	KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
@@ -390,6 +388,7 @@ swap_out(vaddr_t va,struct addrspace *as)
         }
     }
 
+    int x = splhigh();
     struct page_table_entry* pte = get_pte(as->page_table,va);
     KASSERT(pte != NULL);
     // lock_acquire(swap_lock);
@@ -419,10 +418,12 @@ swap_out(vaddr_t va,struct addrspace *as)
     int result = VOP_WRITE(swap_node, &ku);
     if (result)
     {
-    	// lock_release(swap_lock);
+    	lock_release(swap_lock);
+    	panic("Errno: %d, write failed",result);
     	return result;
     }
     // lock_release(swap_lock);
+    splx(x);
     return 0;
 }
 
@@ -436,6 +437,7 @@ swap_in(vaddr_t va,struct addrspace *as)
     KASSERT(pte->pte_state.swap_index >= 0);
 
     // lock_acquire(swap_lock);
+    int x = splhigh();
   	struct iovec iov;
 	struct uio ku;
 	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
@@ -447,5 +449,6 @@ swap_in(vaddr_t va,struct addrspace *as)
     	return result;
     }
     // lock_release(swap_lock);
+    splx(x);
     return 0;
 }

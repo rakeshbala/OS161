@@ -453,12 +453,12 @@ void debugVM(void){
 	int x = splhigh();
 	unsigned int i;
 	int fixed_count=0;
+	kprintf("\n");
 	for (i = 0; i < coremap_size; ++i)
 	{
-		if (coremap[i].p_state == PS_FREE)
+		if (coremap[i].va == 0)
 		{
-			// i++;
-			// break;
+			continue;
 		}else if (coremap[i].p_state == PS_FIXED){
 			fixed_count++;
 		}
@@ -484,6 +484,11 @@ void debugVM(void){
 		}
 		kprintf("%d: vaddr:%lx as:%p state:%s\n",i,(unsigned long int)coremap[i].va
 			,coremap[i].as, state );
+	}
+	kprintf("Swap array:\n");
+	for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
+	{
+		kprintf("%c",swapped_pages[i]);
 	}
 	kprintf("\nSearch start: %d\n",search_start);
 	kprintf("Address space: %p\n",curthread->t_addrspace);
