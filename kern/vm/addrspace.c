@@ -158,6 +158,7 @@ copy_page_table(struct addrspace *newas,
 			int result = VOP_READ(swap_node, &ku);
 			if (result)
 			{
+				kfree(*newpt);
 				return result;
 			}
 			//copy out from permanent buffer
@@ -173,6 +174,7 @@ copy_page_table(struct addrspace *newas,
 			}
 			if ((*newpt)->pte_state.swap_index < 0)
 			{
+				kfree(*newpt);
 				return ENOMEM;
 			}
 			lock_release(swap_lock);
@@ -184,6 +186,7 @@ copy_page_table(struct addrspace *newas,
 			result = VOP_WRITE(swap_node, &ku2);
 			if (result)
 			{
+				kfree(*newpt);
 				return result;
 			}
 			(*newpt)->pte_state.pte_lock_ondisk |= PTE_ONDISK;
@@ -394,6 +397,7 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as){
 	int *dirty_index = (int *)kmalloc(book_size * sizeof(int));
 	if (dirty_index == NULL)
 	{
+		kfree(clean_index);
 		return ENOMEM;
 	}
 	int dirty_count = 0;
