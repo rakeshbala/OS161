@@ -309,7 +309,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		int core_index = pte->paddr/PAGE_SIZE;
 		if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
 		{
-			int result = swap_in(pte->vaddr, as);
+			int result = swap_in(pte);
 			if (result)
 			{
 				panic("Swap in read failed\n");
@@ -442,17 +442,14 @@ swap_out(vaddr_t va,struct addrspace *as)
 }
 
 int
-swap_in(vaddr_t va,struct addrspace *as)
+swap_in(struct page_table_entry *pte)
 {
 
-    struct page_table_entry* pte = get_pte(as->page_table,va);
     KASSERT(pte != NULL);
     KASSERT(pte->paddr != 0);
     KASSERT(pte->pte_state.swap_index >= 0);
     KASSERT(swap_node != NULL);
 
-    // lock_acquire(swap_lock);
-    // int x = splhigh();
   	struct iovec iov;
 	struct uio ku;
 	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
@@ -463,7 +460,5 @@ swap_in(vaddr_t va,struct addrspace *as)
     	lock_release(swap_lock);
     	return result;
     }
-    // lock_release(swap_lock);
-    // splx(x);
     return 0;
 }

@@ -48,6 +48,7 @@
 #include <mainbus.h>
 #include <vnode.h>
 #include <kern/procsys.h>
+#include <vm.h>
 
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"

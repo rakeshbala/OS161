@@ -36,10 +36,11 @@
  */
 
 
-#include <addrspace.h>
 #include <machine/vm.h>
 #include <synch.h>
 #include "vm_enum.h"
+#include <addrspace.h>
+
 
 /* Fault-type arguments to vm_fault() */
 #define VM_FAULT_READ        0    /* A read was attempted */
@@ -90,6 +91,6 @@ void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
 
 int swap_out(vaddr_t va,struct addrspace *as);
-int swap_in(vaddr_t va,struct addrspace *as);
+int swap_in(struct page_table_entry *pte);
 
 #endif /* _VM_H_ */

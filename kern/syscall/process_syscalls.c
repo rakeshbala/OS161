@@ -17,6 +17,7 @@
 #include <addrspace.h>
 #include <vfs.h>
 #include <copyinout.h>
+#include <vm.h>
 
 
 #define MAX_ARG_NUM 100
