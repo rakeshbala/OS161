@@ -1411,18 +1411,18 @@ allcpu_tlbshootdown(vaddr_t vaddr)
 {
 	unsigned i;
 	struct cpu *c;
-	struct tlbshootdown *tlb_wrap = (struct tlbshootdown *)kmalloc(sizeof(struct tlbshootdown));
-	if (tlb_wrap == NULL)
-	{
-		return ENOMEM;
-	}
-	tlb_wrap->ts_addrspace = NULL;
-	tlb_wrap->ts_vaddr = vaddr;
+	struct tlbshootdown tlb_wrap;// = (struct tlbshootdown *)kmalloc(sizeof(struct tlbshootdown));
+	// if (tlb_wrap == NULL)
+	// {
+	// 	return ENOMEM;
+	// }
+	tlb_wrap.ts_addrspace = NULL;
+	tlb_wrap.ts_vaddr = vaddr;
 
 	for (i=0; i < cpuarray_num(&allcpus); i++) {
 		c = cpuarray_get(&allcpus, i);
 		if (c != curcpu->c_self) {
-			ipi_tlbshootdown(c, (const struct tlbshootdown *)tlb_wrap);
+			ipi_tlbshootdown(c, (const struct tlbshootdown *)&tlb_wrap);
 		}
 	}
 	return 0;

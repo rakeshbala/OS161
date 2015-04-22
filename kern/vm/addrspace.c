@@ -45,10 +45,13 @@
 //  * used. The cheesy hack versions in dumbvm.c are used instead.
 //  */
 //
+
+char swapped_pages[MAX_SWAP_PG_NUM];
+struct lock *swap_lock;
+
 int copy_page_table(struct addrspace *newas,
 	struct page_table_entry *oldpt, struct page_table_entry **newpt);
 int copy_regions(struct region_entry *old_regions, struct region_entry **new_region);
-int evict_page(int c_index, page_state pstate);
 
 struct addrspace *
 as_create(void)
@@ -362,11 +365,11 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as){
  	{
  		if (clean_count > 0)
  		{
- 			s_index = random()%clean_count;
+ 			s_index = clean_index[random()%clean_count];
  			pstate = PS_CLEAN;
  		}else{
  			KASSERT(dirty_count > 0);
- 			s_index = random()%dirty_count;
+ 			s_index = dirty_index[random()%dirty_count];
  			pstate = PS_DIRTY;
  		}
  	}
@@ -401,6 +404,14 @@ void page_free(struct page_table_entry *pte){
 		coremap[core_index].p_state = PS_FREE;
 		spinlock_release(&coremap_lock);
 	}
+
+	if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
+	{
+		KASSERT(pte->pte_state.swap_index >= 0);
+		lock_acquire(swap_lock);
+		swapped_pages[pte->pte_state.swap_index] = 'U';
+		lock_release(swap_lock);
+	}
 }
 
 int evict_page(int c_index, page_state pstate)
@@ -414,20 +425,25 @@ int evict_page(int c_index, page_state pstate)
 		return EINVAL;
 	}
 	/************ RB:On to swapping decisions ************/
-	int result = allcpu_tlbshootdown(coremap[c_index].va);
+	vaddr_t ev_vaddr = coremap[c_index].va;
+	struct addrspace * ev_as = coremap[c_index].as;
+	int result = allcpu_tlbshootdown(ev_vaddr);
 	if (result)
 	{
 		panic("TLB shootdown failed\n");
 		return result;
 	}
 
-	struct page_table_entry *evict_pte = get_pte(coremap[c_index].as->page_table,
-		coremap[c_index].va);
+	struct page_table_entry *evict_pte = get_pte(ev_as->page_table,ev_vaddr);
 	KASSERT(evict_pte != NULL);
 	if (pstate == PS_DIRTY)
 	{
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
-		//swap out
+		int result = swap_out(ev_vaddr, ev_as);
+		if (result)
+		{
+			panic("Swap space exhausted\n");
+		}
 		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
 	}

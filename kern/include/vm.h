@@ -48,6 +48,8 @@
 
 #define MAX_SWAP_PG_NUM 2000
 
+extern char swapped_pages[MAX_SWAP_PG_NUM];
+extern struct lock *swap_lock;
 /************ RB:Coremap Declarations ************/
 
 struct coremap_entry
