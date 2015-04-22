@@ -90,6 +90,11 @@ void free_kpages(vaddr_t addr);
 void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
 
+/************ RB:User page allocation methods ************/
+int page_alloc (struct page_table_entry* pte, struct addrspace *as);
+void page_free(struct page_table_entry *pte);
+int evict_page(int c_index, page_state pstate);
+
 int swap_out(vaddr_t va,struct addrspace *as);
 int swap_in(struct page_table_entry *pte);
 

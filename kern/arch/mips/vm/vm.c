@@ -44,6 +44,7 @@
 #include <uio.h>
 #include <vfs.h>
 #include <vnode.h>
+#include <cpu.h>
 
 
 /* under dumbvm, always have 48k of user stack */
@@ -331,6 +332,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	if ((region_perm & AX_WRITE) == AX_WRITE)
 	{
 		coremap[core_index].p_state = PS_DIRTY;
+		pte->pte_state.pte_lock_ondisk &= ~(PTE_ONDISK);
 		elo = pte->paddr | TLBLO_DIRTY | TLBLO_VALID;
 	}else{
 		elo = pte->paddr|TLBLO_VALID;
@@ -386,6 +388,144 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 
 	*perm = 0;
 	return false;
+}
+
+/************ RB:User page allocation. Always returns a PS_VICTIM page ************/
+int
+page_alloc(struct page_table_entry *pte, struct addrspace *as){
+
+/************ RB:Find page for allocation ************/
+	int book_size = coremap_size-search_start;
+	page_state pstate = 0;
+	int *clean_index = (int *)kmalloc(book_size * sizeof(int));
+	if (clean_index == NULL)
+	{
+		return ENOMEM;
+	}
+	int clean_count = 0;
+	int *dirty_index = (int *)kmalloc(book_size * sizeof(int));
+	if (dirty_index == NULL)
+	{
+		kfree(clean_index);
+		return ENOMEM;
+	}
+	int dirty_count = 0;
+	int s_index = -1;
+
+	spinlock_acquire(&coremap_lock);
+	for (unsigned int i = 0; i < coremap_size; ++i)
+	{
+		if (coremap[i].p_state == PS_FREE)
+		{
+			s_index = i;
+			pstate = PS_FREE;
+			break;
+		 }else if(coremap[i].p_state == PS_CLEAN){
+			clean_index[clean_count]=i;
+			clean_count++;
+		}else if(coremap[i].p_state == PS_DIRTY){
+			dirty_index[dirty_count]=i;
+			dirty_count++;
+		}
+ 	}
+ 	if (s_index == -1)
+ 	{
+ 		if (clean_count > 5)
+ 		{
+ 			s_index = clean_index[random()%clean_count];
+ 			pstate = PS_CLEAN;
+ 		}else{
+ 			KASSERT(dirty_count > 0);
+ 			s_index = dirty_index[random()%dirty_count];
+ 			pstate = PS_DIRTY;
+ 		}
+ 	}
+	coremap[s_index].p_state = PS_VICTIM;
+	spinlock_release(&coremap_lock);
+	kfree(clean_index);
+	kfree(dirty_index);
+
+	// Make  decisions victim page
+	int result = evict_page(s_index, pstate);
+	if (result)
+	{
+		coremap[s_index].p_state = pstate;
+		return result;
+	}
+
+	coremap[s_index].chunk_size = 1;
+	coremap[s_index].va = pte->vaddr & PAGE_FRAME;
+	coremap[s_index].as = as;
+	pte->paddr = s_index*PAGE_SIZE;
+	bzero((void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE);
+	return 0;
+}
+
+void page_free(struct page_table_entry *pte){
+	KASSERT(pte != NULL);
+	if (pte->paddr != 0)
+	{
+		int core_index = pte->paddr/PAGE_SIZE;
+		pte->paddr = (vaddr_t)NULL;
+		spinlock_acquire(&coremap_lock);
+		coremap[core_index].chunk_size = -1;
+		coremap[core_index].p_state = PS_FREE;
+		spinlock_release(&coremap_lock);
+	}
+
+	if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
+	{
+		KASSERT(pte->pte_state.swap_index >= 0);
+		lock_acquire(swap_lock);
+		swapped_pages[pte->pte_state.swap_index] = 'U';
+		lock_release(swap_lock);
+	}
+}
+
+int evict_page(int c_index, page_state pstate)
+{
+	/************ RB:Clear the easy cases first ************/
+	if (pstate == PS_FREE)
+	{
+		return 0;
+	}else if(pstate != PS_CLEAN && pstate != PS_DIRTY){
+		panic("Selected a non selectable page\n");
+		return EINVAL;
+	}
+	/************ RB:On to swapping decisions ************/
+	vaddr_t ev_vaddr = coremap[c_index].va;
+	struct addrspace * ev_as = coremap[c_index].as;
+	int result = allcpu_tlbshootdown(ev_vaddr, ev_as);
+	if (result)
+	{
+		panic("TLB shootdown failed\n");
+		return result;
+	}
+
+	struct page_table_entry *evict_pte = get_pte(ev_as->page_table,ev_vaddr);
+	KASSERT(evict_pte != NULL);
+	if (pstate == PS_DIRTY)
+	{
+		lock_acquire(pte_lock);
+		evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
+		lock_release(pte_lock);
+
+		int result = swap_out(ev_vaddr, ev_as);
+		if (result)
+		{
+			panic("Swap space exhausted\n" );
+			return result;
+		}
+		lock_acquire(pte_lock);
+		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
+		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
+		cv_broadcast(pte_cv,pte_lock);
+		lock_release(pte_lock);
+
+	}
+	KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
+	evict_pte->paddr = 0;
+	return 0;
 }
 
 int
@@ -457,7 +597,6 @@ swap_in(struct page_table_entry *pte)
     int result = VOP_READ(swap_node, &ku);
     if (result)
     {
-    	lock_release(swap_lock);
     	return result;
     }
     return 0;
