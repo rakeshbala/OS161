@@ -53,7 +53,7 @@
  * Wrap rma_stealmem in a spinlock.
  */
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
-static struct vnode *swap_node;
+struct vnode *swap_node = NULL;
 char swapped_pages[MAX_SWAP_PG_NUM];
 struct lock *swap_lock;
 
@@ -172,6 +172,7 @@ alloc_kpages(int npages)
 			}
 			coremap[i].chunk_size = npages;
 			coremap[i].va = PADDR_TO_KVADDR(pa);
+			coremap[i].as = NULL;
 		}
 		bzero((void *)PADDR_TO_KVADDR(pa), npages * PAGE_SIZE);
 		return PADDR_TO_KVADDR(pa);
@@ -280,7 +281,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}
 	}
 	/************ RB:Prevent access while swapping ************/
-	if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
+	while ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
 	{
 		wchan_lock(as->swap_wc);
 		wchan_sleep(as->swap_wc);
@@ -290,9 +291,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	{
 		/************ RB:Allocate since it is page fault ************/
 		result = page_alloc(pte,as);
-		if (result !=0) {
-			return ENOMEM;
-		}
+		if (result !=0) return ENOMEM;
 		KASSERT(pte->paddr != 0);
 		int core_index = pte->paddr/PAGE_SIZE;
 		if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
@@ -304,9 +303,12 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			}
 			coremap[core_index].p_state = PS_CLEAN;
 		}else{
-			coremap[core_index].p_state = PS_DIRTY;
+		 	coremap[core_index].p_state = PS_DIRTY;
 		}
 	}
+
+	KASSERT(coremap[pte->paddr/PAGE_SIZE].p_state != PS_VICTIM);
+
 
 	int core_index = pte->paddr/PAGE_SIZE;
 
@@ -390,7 +392,7 @@ swap_out(vaddr_t va,struct addrspace *as)
 
     struct page_table_entry* pte = get_pte(as->page_table,va);
     KASSERT(pte != NULL);
-    lock_acquire(swap_lock);
+    // lock_acquire(swap_lock);
     if (pte->pte_state.swap_index < 0)
     {
     	for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
@@ -417,10 +419,10 @@ swap_out(vaddr_t va,struct addrspace *as)
     int result = VOP_WRITE(swap_node, &ku);
     if (result)
     {
-    	lock_release(swap_lock);
+    	// lock_release(swap_lock);
     	return result;
     }
-    lock_release(swap_lock);
+    // lock_release(swap_lock);
     return 0;
 }
 
@@ -431,9 +433,9 @@ swap_in(vaddr_t va,struct addrspace *as)
     struct page_table_entry* pte = get_pte(as->page_table,va);
     KASSERT(pte != NULL);
     KASSERT(pte->paddr != 0);
-    lock_acquire(swap_lock);
     KASSERT(pte->pte_state.swap_index >= 0);
 
+    // lock_acquire(swap_lock);
   	struct iovec iov;
 	struct uio ku;
 	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
@@ -441,9 +443,9 @@ swap_in(vaddr_t va,struct addrspace *as)
     int result = VOP_READ(swap_node, &ku);
     if (result)
     {
-    	lock_release(swap_lock);
+    	// lock_release(swap_lock);
     	return result;
     }
-    lock_release(swap_lock);
+    // lock_release(swap_lock);
     return 0;
 }

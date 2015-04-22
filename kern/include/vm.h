@@ -50,6 +50,8 @@
 
 extern char swapped_pages[MAX_SWAP_PG_NUM];
 extern struct lock *swap_lock;
+extern struct vnode *swap_node;
+
 /************ RB:Coremap Declarations ************/
 
 struct coremap_entry

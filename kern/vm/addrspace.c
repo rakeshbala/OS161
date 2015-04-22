@@ -39,6 +39,10 @@
 #include <vm.h>
 #include <wchan.h>
 #include <cpu.h>
+#include <kern/iovec.h>
+#include <uio.h>
+#include <vfs.h>
+#include <vnode.h>
 // /*
 //  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
 //  * assignment, this file is not compiled or linked or in any way
@@ -52,6 +56,8 @@ struct lock *swap_lock;
 int copy_page_table(struct addrspace *newas,
 	struct page_table_entry *oldpt, struct page_table_entry **newpt);
 int copy_regions(struct region_entry *old_regions, struct region_entry **new_region);
+static char page_buffer[PAGE_SIZE];
+struct vnode *swap_node;
 
 struct addrspace *
 as_create(void)
@@ -125,15 +131,68 @@ copy_page_table(struct addrspace *newas,
 			return ENOMEM;
 		}
 		(*newpt)->vaddr = oldpt->vaddr;
-		(*newpt)->pte_state = oldpt->pte_state;
-		int result = page_alloc(*newpt, newas);
-		if (result != 0)
+		(*newpt)->pte_state.pte_lock_ondisk = oldpt->pte_state.pte_lock_ondisk;
+		int result;
+		if (oldpt->paddr != 0 )
 		{
-			kfree(*newpt);
-			return ENOMEM;
+			result = page_alloc(*newpt, newas);
+			if (result != 0)
+			{
+				kfree(*newpt);
+				return ENOMEM;
+			}
+			KASSERT((*newpt)->paddr != 0);
+			memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
+				(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
 		}
-		memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
-			(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
+
+		if ((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
+		{
+			//copy into permanent buffer
+			lock_acquire(swap_lock);
+			struct iovec iov;
+			struct uio ku;
+			KASSERT(oldpt->pte_state.swap_index >= 0 );
+			KASSERT(swap_node != NULL);
+
+			uio_kinit(&iov, &ku, (void *)page_buffer, PAGE_SIZE,
+				oldpt->pte_state.swap_index*PAGE_SIZE, UIO_READ);
+			int result = VOP_READ(swap_node, &ku);
+			if (result)
+			{
+				lock_release(swap_lock);
+				return result;
+			}
+			//copy out from permanent buffer
+
+			for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
+			{
+				if (swapped_pages[i] == 'U')
+				{
+					(*newpt)->pte_state.swap_index = i;
+					swapped_pages[i] = 'A';
+					break;
+				}
+			}
+			if ((*newpt)->pte_state.swap_index < 0)
+			{
+				lock_release(swap_lock);
+				return ENOMEM;
+			}
+
+			struct iovec iov2;
+			struct uio ku2;
+			uio_kinit(&iov2, &ku2, (void *)page_buffer, PAGE_SIZE,
+				(*newpt)->pte_state.swap_index*PAGE_SIZE, UIO_WRITE);
+			result = VOP_WRITE(swap_node, &ku2);
+			if (result)
+			{
+				lock_release(swap_lock);
+				return result;
+			}
+			lock_release(swap_lock);
+
+		}
 		// (*newpt)->permission = oldpt->permission;
 		// (*newpt)->on_disk = oldpt->on_disk;
 
@@ -446,6 +505,8 @@ int evict_page(int c_index, page_state pstate)
 		}
 		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
+		wchan_wakeall(ev_as->swap_wc);
+
 	}
 	KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
 	evict_pte->paddr = 0;

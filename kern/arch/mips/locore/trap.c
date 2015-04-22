@@ -53,6 +53,7 @@ extern void asm_usermode(struct trapframe *tf);
 /* called only from assembler, so not declared in a header */
 void mips_trap(struct trapframe *tf);
 
+void debugVM(void);
 
 /* Names for trap codes */
 #define NTRAPCODES 13
@@ -82,29 +83,8 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 	int sig = 0;
 
 	/************ RB:Should be removed ************/
-	int x = splhigh();
-	unsigned int i;
-	int fixed_count=0;
-	for (i = 0; i < coremap_size; ++i)
-	{
-		if (coremap[i].p_state == PS_FREE)
-		{
-			i++;
-			break;
-		}else if (coremap[i].p_state == PS_FIXED){
-			fixed_count++;
-		}
-		// kprintf("%d: vaddr:%lx as:%p\n",i,(unsigned long int)coremap[i].va
-			// ,coremap[i].as);
-	}
-	kprintf("\n----\n");
-	kprintf("Coremap last filled entry: %u/%d\n",i,coremap_size);
-	kprintf("Number of kpages: %d\n",fixed_count);
-	kprintf("----\n");
-	splx(x);
+	debugVM();
 
-	// print_page_table(curthread->t_addrspace->page_table);
-	// spinlock_release(&tlb_lock);
 
 	KASSERT(code < NTRAPCODES);
 	switch (code) {
@@ -467,4 +447,49 @@ enter_new_process(int argc, userptr_t argv, vaddr_t stack, vaddr_t entry)
 	tf.tf_sp = stack;
 
 	mips_usermode(&tf);
+}
+
+void debugVM(void){
+	int x = splhigh();
+	unsigned int i;
+	int fixed_count=0;
+	for (i = 0; i < coremap_size; ++i)
+	{
+		if (coremap[i].p_state == PS_FREE)
+		{
+			// i++;
+			// break;
+		}else if (coremap[i].p_state == PS_FIXED){
+			fixed_count++;
+		}
+		const char *state;
+		switch (coremap[i].p_state){
+			case PS_FREE:
+				state = "FREE";
+				break;
+			case PS_FIXED:
+				state = "FIXED";
+				break;
+			case PS_DIRTY:
+				state = "DIRTY";
+				break;
+			case PS_CLEAN:
+				state = "CLEAN";
+				break;
+			case PS_VICTIM:
+				state = "VICTIM";
+				break;
+			default:
+				state = "UNKNOWN";
+		}
+		kprintf("%d: vaddr:%lx as:%p state:%s\n",i,(unsigned long int)coremap[i].va
+			,coremap[i].as, state );
+	}
+	kprintf("\nSearch start: %d\n",search_start);
+	kprintf("Address space: %p\n",curthread->t_addrspace);
+	// kprintf("Coremap last filled entry: %u/%d\n",i,coremap_size);
+	kprintf("Number of kpages: %d\n",fixed_count);
+	kprintf("----\n");
+	print_page_table(curthread->t_addrspace->page_table);
+	splx(x);
 }
