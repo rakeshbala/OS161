@@ -1407,7 +1407,7 @@ interprocessor_interrupt(void)
 }
 
 int
-allcpu_tlbshootdown(vaddr_t vaddr)
+allcpu_tlbshootdown(vaddr_t vaddr, struct addrspace *as)
 {
 	unsigned i;
 	struct cpu *c;
@@ -1416,7 +1416,7 @@ allcpu_tlbshootdown(vaddr_t vaddr)
 	// {
 	// 	return ENOMEM;
 	// }
-	tlb_wrap.ts_addrspace = NULL;
+	tlb_wrap.ts_addrspace = as;
 	tlb_wrap.ts_vaddr = vaddr;
 
 	for (i=0; i < cpuarray_num(&allcpus); i++) {

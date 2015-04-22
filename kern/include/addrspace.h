@@ -47,6 +47,10 @@ struct vnode;
  * space of a process.
  *
  */
+extern struct cv *pte_cv;
+extern struct lock *pte_lock;
+
+
 struct state_field {
     unsigned int pte_lock_ondisk:2;
     int swap_index:12;
@@ -83,7 +87,6 @@ struct addrspace {
         vaddr_t heap_start;
         vaddr_t heap_end;
         vaddr_t stack_end;
-        struct wchan *swap_wc;
 #endif
 };
 

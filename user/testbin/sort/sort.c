@@ -27,7 +27,7 @@
  * SUCH DAMAGE.
  */
 
-/* sort.c 
+/* sort.c
  *    Test program to sort a large number of integers.
  *
  *    Intention is to stress virtual memory system.
@@ -39,7 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <err.h>
-
+#include <stdio.h>
 /* Larger than physical memory */
 #define SIZE  (144*1024)
 
@@ -88,6 +88,7 @@ sort(int *arr, int size)
 	}
 
 	memcpy(arr, tmp, size*sizeof(int));
+	// printf("... ");
 }
 
 ////////////////////////////////////////////////////////////
@@ -105,7 +106,7 @@ initarray(void)
 	 */
 	srandom(533);
 
-	for (i = 0; i < SIZE; i++) {		
+	for (i = 0; i < SIZE; i++) {
 		A[i] = random();
 	}
 }
@@ -118,7 +119,7 @@ check(void)
 
 	for (i=0; i<SIZE-1; i++) {
 		if (A[i] > A[i+1]) {
-			errx(1, "Failed: A[%d] is %d, A[%d] is %d", 
+			errx(1, "Failed: A[%d] is %d, A[%d] is %d",
 			     i, A[i], i+1, A[i+1]);
 		}
 	}
@@ -130,6 +131,7 @@ main(void)
 {
 	initarray();
 	sort(A, SIZE);
+	printf("checking\n");
 	check();
 	return 0;
 }

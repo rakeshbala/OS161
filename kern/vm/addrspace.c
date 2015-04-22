@@ -74,11 +74,6 @@ as_create(void)
 	as->regions = NULL;
 	as->stack_end = USERSTACK;
 	as->page_table = NULL;
-	as->swap_wc = wchan_create("swap");
-	if (as->swap_wc == NULL)
-	{
-		return NULL;
-	}
 	return as;
 }
 
@@ -120,6 +115,7 @@ int
 copy_page_table(struct addrspace *newas,
 	struct page_table_entry *oldpt, struct page_table_entry **newpt)
 {
+
 	if (oldpt == NULL)
 	{
 		(*newpt) = NULL;
@@ -152,7 +148,6 @@ copy_page_table(struct addrspace *newas,
 		if ((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
 		{
 			//copy into permanent buffer
-			lock_acquire(swap_lock);
 			struct iovec iov;
 			struct uio ku;
 			KASSERT(oldpt->pte_state.swap_index >= 0 );
@@ -163,11 +158,10 @@ copy_page_table(struct addrspace *newas,
 			int result = VOP_READ(swap_node, &ku);
 			if (result)
 			{
-				lock_release(swap_lock);
 				return result;
 			}
 			//copy out from permanent buffer
-
+			lock_acquire(swap_lock);
 			for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
 			{
 				if (swapped_pages[i] == 'U')
@@ -179,9 +173,9 @@ copy_page_table(struct addrspace *newas,
 			}
 			if ((*newpt)->pte_state.swap_index < 0)
 			{
-				lock_release(swap_lock);
 				return ENOMEM;
 			}
+			lock_release(swap_lock);
 
 			struct iovec iov2;
 			struct uio ku2;
@@ -190,10 +184,8 @@ copy_page_table(struct addrspace *newas,
 			result = VOP_WRITE(swap_node, &ku2);
 			if (result)
 			{
-				lock_release(swap_lock);
 				return result;
 			}
-			lock_release(swap_lock);
 			(*newpt)->pte_state.pte_lock_ondisk |= PTE_ONDISK;
 			if((*newpt)->paddr !=0 ){
 				coremap[(*newpt)->paddr/PAGE_SIZE].p_state = PS_CLEAN;
@@ -489,7 +481,7 @@ int evict_page(int c_index, page_state pstate)
 	/************ RB:On to swapping decisions ************/
 	vaddr_t ev_vaddr = coremap[c_index].va;
 	struct addrspace * ev_as = coremap[c_index].as;
-	int result = allcpu_tlbshootdown(ev_vaddr);
+	int result = allcpu_tlbshootdown(ev_vaddr, ev_as);
 	if (result)
 	{
 		panic("TLB shootdown failed\n");
@@ -500,15 +492,20 @@ int evict_page(int c_index, page_state pstate)
 	KASSERT(evict_pte != NULL);
 	if (pstate == PS_DIRTY)
 	{
+		lock_acquire(pte_lock);
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
+		lock_release(pte_lock);
+
 		int result = swap_out(ev_vaddr, ev_as);
 		if (result)
 		{
 			panic("Swap space exhausted\n" );
 		}
+		lock_acquire(pte_lock);
 		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
-		wchan_wakeall(ev_as->swap_wc);
+		cv_broadcast(pte_cv,pte_lock);
+		lock_release(pte_lock);
 
 	}
 	KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
