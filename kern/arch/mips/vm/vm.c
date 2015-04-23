@@ -132,11 +132,11 @@ alloc_kpages(int npages)
 
 	if (vm_is_bootstrapped == true)
 	{
-		int book_size = coremap_size-search_start;
+		// int book_size = coremap_size-search_start;
 		page_state pstate = 0;
-		int clean_index[book_size];
+		int clean_index[10];
 		int clean_count = 0;
-		int dirty_index[book_size];
+		int dirty_index[10];
 		int dirty_count = 0;
 		int s_index = -1;
 
@@ -149,11 +149,17 @@ alloc_kpages(int npages)
 				pstate = PS_FREE;
 				break;
 			}else if(coremap[i].p_state == PS_CLEAN){
-				clean_index[clean_count]=i;
-				clean_count++;
+				if (clean_count <10)
+				{
+					clean_index[clean_count]=i;
+					clean_count++;
+				}
 			}else if(coremap[i].p_state == PS_DIRTY){
-				dirty_index[dirty_count]=i;
-				dirty_count++;
+				if (dirty_count <10)
+				{
+					dirty_index[dirty_count]=i;
+					dirty_count++;
+				}
 			}
 		}
 
@@ -161,11 +167,11 @@ alloc_kpages(int npages)
 		{
 			if (clean_count > 5)
 			{
-				s_index = clean_index[random()%clean_count];
+				s_index = clean_index[random()%10];
 				pstate = PS_CLEAN;
 			}else{
 				KASSERT(dirty_count > 0);
-				s_index = dirty_index[random()%dirty_count];
+				s_index = dirty_index[random()%10];
 				pstate = PS_DIRTY;
 			}
 		}
@@ -295,7 +301,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 	/************ RB:Prevent access while swapping ************/
 	lock_acquire(pte_lock);
-	while ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
+	if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
 	{
 		cv_wait(pte_cv,pte_lock);
 	}
@@ -510,7 +516,7 @@ int evict_page(int c_index, page_state pstate)
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
 		lock_release(pte_lock);
 
-		int result = swap_out(ev_vaddr, ev_as);
+		int result = swap_out(evict_pte);
 		if (result)
 		{
 			panic("Swap space exhausted\n" );
@@ -529,20 +535,21 @@ int evict_page(int c_index, page_state pstate)
 }
 
 int
-swap_out(vaddr_t va,struct addrspace *as)
+swap_out(struct page_table_entry *pte)
 {
     if (swap_node == NULL)
     {
-        int err = vfs_open((char *)"lhd0raw:",O_RDWR,0,&swap_node);
-        if(err != 0)
-        {
-            return err;
+        // int err = vfs_open((char *)"lhd0raw:",O_RDWR,0,&swap_node);
+        // if(err != 0)
+        // {
+        //     return err;
+        // }
+        int err = vfs_open((char *)"swapfile", O_RDWR|O_CREAT|O_TRUNC, 0, &swap_node);
+        if (err != 0) {
+        	return err;
         }
     }
 
-    // int x = splhigh();
-
-    struct page_table_entry* pte = get_pte(as->page_table,va);
     KASSERT(pte != NULL);
     lock_acquire(swap_lock);
     if (pte->pte_state.swap_index < 0)
@@ -564,7 +571,6 @@ swap_out(vaddr_t va,struct addrspace *as)
     }
     lock_release(swap_lock);
 
-    //locks
   	struct iovec iov;
 	struct uio ku;
 	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
@@ -572,12 +578,10 @@ swap_out(vaddr_t va,struct addrspace *as)
     int result = VOP_WRITE(swap_node, &ku);
     if (result)
     {
-    	// lock_release(swap_lock);
     	panic("Errno: %d, write failed",result);
     	return result;
     }
-    // lock_release(swap_lock);
-    // splx(x);
+
     return 0;
 }
 
