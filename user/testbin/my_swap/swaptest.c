@@ -13,7 +13,7 @@ main()
 
 	printf("Entering custom swap test\n");
 
-	/* move number in so that sparse[i][0]=i */
+/* move number in so that sparse[i][0]=i */
 	for (int i=0; i<NumPages; i++) {
 		for (int j = 0; j < PageSize; ++j)
 		{
@@ -37,4 +37,3 @@ main()
 	}
 	return 0;
 }
-

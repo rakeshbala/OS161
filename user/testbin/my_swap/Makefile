@@ -8,4 +8,3 @@ SRCS=swaptest.c
 BINDIR=/testbin
 
 .include "$(TOP)/mk/os161.prog.mk"
-
