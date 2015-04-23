@@ -1,31 +1,31 @@
 /*
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
- *	The President and Fellows of Harvard College.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE UNIVERSITY AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE UNIVERSITY OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- */
+* Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
+*	The President and Fellows of Harvard College.
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions
+* are met:
+* 1. Redistributions of source code must retain the above copyright
+*    notice, this list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright
+*    notice, this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the University nor the names of its contributors
+*    may be used to endorse or promote products derived from this software
+*    without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE UNIVERSITY AND CONTRIBUTORS ``AS IS'' AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+* ARE DISCLAIMED.  IN NO EVENT SHALL THE UNIVERSITY OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+* OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+* HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+* OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+* SUCH DAMAGE.
+*/
 
 #include <types.h>
 #include <kern/errno.h>
@@ -51,8 +51,8 @@
 // #define DUMBVM_STACKPAGES    12
 
 /*
- * Wrap rma_stealmem in a spinlock.
- */
+* Wrap rma_stealmem in a spinlock.
+*/
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 struct vnode *swap_node = NULL;
 char swapped_pages[MAX_SWAP_PG_NUM];
@@ -78,8 +78,8 @@ vm_bootstrap(void)
 	KASSERT(pte_cv != NULL);
 	KASSERT(swap_lock != NULL);
 
-	// dbflags = dbflags | DB_VM;
-	/************ RB:Accomodate for last address misalignment ************/
+// dbflags = dbflags | DB_VM;
+/************ RB:Accomodate for last address misalignment ************/
 	paddr_t fpaddr,lpaddr;
 	ram_getsize(&fpaddr,&lpaddr);
 	paddr_t availLast = lpaddr - (lpaddr%PAGE_SIZE);
@@ -89,10 +89,10 @@ vm_bootstrap(void)
 	KASSERT(coremap != NULL);
 	paddr_t freeaddr_start = fpaddr + coremap_size*sizeof(struct coremap_entry);
 
-	/************ RB:Accomodate for free address start misalignment ************/
+/************ RB:Accomodate for free address start misalignment ************/
 	freeaddr_start = freeaddr_start + (PAGE_SIZE - (freeaddr_start%PAGE_SIZE));
 
-	/************ RB:Mark fixed ************/
+/************ RB:Mark fixed ************/
 	unsigned int fixedIndex = freeaddr_start/PAGE_SIZE;
 	search_start = fixedIndex;
 	for (unsigned int i = 0; i <= availLast/PAGE_SIZE; ++i)
@@ -132,7 +132,7 @@ alloc_kpages(int npages)
 
 	if (vm_is_bootstrapped == true)
 	{
-		// int book_size = coremap_size-search_start;
+// int book_size = coremap_size-search_start;
 		page_state pstate = 0;
 		int clean_index[10];
 		int clean_count = 0;
@@ -257,110 +257,110 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	ax_permssion region_perm;
 	as = curthread->t_addrspace;
 	if (as == NULL) {
-		return EFAULT; //as not setup
-	}
-	int result = vm_validitycheck(faultaddress, curthread->t_addrspace, &region_perm);
-	if (result == false)
+return EFAULT; //as not setup
+}
+int result = vm_validitycheck(faultaddress, curthread->t_addrspace, &region_perm);
+if (result == false)
+{
+	return EFAULT;
+}
+DEBUG(DB_VM, "VM: fault: 0x%x\n", faultaddress);
+switch (faulttype) {
+	case VM_FAULT_READONLY:
+	if (!((region_perm & AX_WRITE) == AX_WRITE))
 	{
 		return EFAULT;
 	}
-	DEBUG(DB_VM, "VM: fault: 0x%x\n", faultaddress);
-	switch (faulttype) {
-		case VM_FAULT_READONLY:
-			if (!((region_perm & AX_WRITE) == AX_WRITE))
-			{
-				return EFAULT;
-			}
-			break;
-		case VM_FAULT_READ:
-			if (!((region_perm & AX_READ) == AX_READ))
-			{
-				return EFAULT;
-			}
-			region_perm &= AX_READ;
-			break;
-		case VM_FAULT_WRITE:
-			if (!((region_perm & AX_WRITE) == AX_WRITE))
-			{
-				return EFAULT;
-			}
-			break;
-		default:
-		return EINVAL;
+	break;
+	case VM_FAULT_READ:
+	if (!((region_perm & AX_READ) == AX_READ))
+	{
+		return EFAULT;
 	}
+	region_perm &= AX_READ;
+	break;
+	case VM_FAULT_WRITE:
+	if (!((region_perm & AX_WRITE) == AX_WRITE))
+	{
+		return EFAULT;
+	}
+	break;
+	default:
+	return EINVAL;
+}
 
-	/************ RB:Check if page fault ************/
-	struct page_table_entry *pte = get_pte(as->page_table,faultaddress);
+/************ RB:Check if page fault ************/
+struct page_table_entry *pte = get_pte(as->page_table,faultaddress);
+if (pte == NULL)
+{
+	pte = add_pte(as, faultaddress, 0);
 	if (pte == NULL)
 	{
-		pte = add_pte(as, faultaddress, 0);
-		if (pte == NULL)
-		{
-			return ENOMEM;
-		}
+		return ENOMEM;
 	}
-	/************ RB:Prevent access while swapping ************/
-	lock_acquire(pte_lock);
-	if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
-	{
-		cv_wait(pte_cv,pte_lock);
-	}
-	lock_release(pte_lock);
+}
+/************ RB:Prevent access while swapping ************/
+lock_acquire(pte_lock);
+if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
+{
+	cv_wait(pte_cv,pte_lock);
+}
+lock_release(pte_lock);
 
-	if (pte->paddr == 0)
-	{
-		/************ RB:Allocate since it is page fault ************/
-		result = page_alloc(pte,as);
-		if (result !=0) return ENOMEM;
-		KASSERT(pte->paddr != 0);
-		int core_index = pte->paddr/PAGE_SIZE;
-		if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
-		{
-			int result = swap_in(pte);
-			if (result)
-			{
-				panic("Swap in read failed\n");
-			}
-			coremap[core_index].p_state = PS_CLEAN;
-		}else{
-		 	coremap[core_index].p_state = PS_DIRTY;
-		}
-	}
+if (pte->paddr == 0)
+{
+/************ RB:Allocate since it is page fault ************/
+	result = page_alloc(pte,as);
+	if (result !=0) return ENOMEM;
+	KASSERT(pte->paddr != 0);
 	int core_index = pte->paddr/PAGE_SIZE;
-	KASSERT(coremap[core_index].p_state != PS_VICTIM);
-
-	/* make sure it's page-aligned */
-	KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
-
-	/* Disable interrupts on this CPU while frobbing the TLB. */
-	spl = splhigh();
-	ehi = faultaddress;
-	if ((region_perm & AX_WRITE) == AX_WRITE)
+	if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
 	{
+		int result = swap_in(pte);
+		if (result)
+		{
+			panic("Swap in read failed\n");
+		}
+		coremap[core_index].p_state = PS_CLEAN;
+	}else{
 		coremap[core_index].p_state = PS_DIRTY;
-		pte->pte_state.pte_lock_ondisk &= ~(PTE_ONDISK);
-		elo = pte->paddr | TLBLO_DIRTY | TLBLO_VALID;
-	}else{
-		elo = pte->paddr|TLBLO_VALID;
 	}
-	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
+}
+int core_index = pte->paddr/PAGE_SIZE;
+KASSERT(coremap[core_index].p_state != PS_VICTIM);
 
-	int index = tlb_probe(ehi,0);
-	if (index > 0)
-	{
-		tlb_write(ehi,elo,index);
-	}else{
-		tlb_random(ehi, elo);
-	}
-	splx(spl);
-	return 0;
+/* make sure it's page-aligned */
+KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
+
+/* Disable interrupts on this CPU while frobbing the TLB. */
+spl = splhigh();
+ehi = faultaddress;
+if ((region_perm & AX_WRITE) == AX_WRITE)
+{
+	coremap[core_index].p_state = PS_DIRTY;
+	pte->pte_state.pte_lock_ondisk &= ~(PTE_ONDISK);
+	elo = pte->paddr | TLBLO_DIRTY | TLBLO_VALID;
+}else{
+	elo = pte->paddr|TLBLO_VALID;
+}
+DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
+
+int index = tlb_probe(ehi,0);
+if (index > 0)
+{
+	tlb_write(ehi,elo,index);
+}else{
+	tlb_random(ehi, elo);
+}
+splx(spl);
+return 0;
 }
 
 bool
 vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 {
 	KASSERT(pas != NULL);
-	/* Assert that the address space has been set up properly. */
+/* Assert that the address space has been set up properly. */
 	as_check_regions(pas);
 	struct region_entry* process_regions = pas->regions;
 	KASSERT(process_regions!= NULL);
@@ -380,7 +380,7 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 		*perm = AX_READ|AX_WRITE;
 		return true;
 	}
-	/*********** RR: check for stack range within 4MB from stack top ***********/
+/*********** RR: check for stack range within 4MB from stack top ***********/
 	if((faultaddress >= pas->stack_end - PAGE_SIZE && faultaddress <= USERSPACETOP)&&
 		(faultaddress >= USERSTACKBASE))
 	{
@@ -426,32 +426,32 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as){
 			s_index = i;
 			pstate = PS_FREE;
 			break;
-		 }else if(coremap[i].p_state == PS_CLEAN){
+		}else if(coremap[i].p_state == PS_CLEAN){
 			clean_index[clean_count]=i;
 			clean_count++;
 		}else if(coremap[i].p_state == PS_DIRTY){
 			dirty_index[dirty_count]=i;
 			dirty_count++;
 		}
- 	}
- 	if (s_index == -1)
- 	{
- 		if (clean_count > 5)
- 		{
- 			s_index = clean_index[random()%clean_count];
- 			pstate = PS_CLEAN;
- 		}else{
- 			KASSERT(dirty_count > 0);
- 			s_index = dirty_index[random()%dirty_count];
- 			pstate = PS_DIRTY;
- 		}
- 	}
+	}
+	if (s_index == -1)
+	{
+		if (clean_count > 5)
+		{
+			s_index = clean_index[random()%clean_count];
+			pstate = PS_CLEAN;
+		}else{
+			KASSERT(dirty_count > 0);
+			s_index = dirty_index[random()%dirty_count];
+			pstate = PS_DIRTY;
+		}
+	}
 	coremap[s_index].p_state = PS_VICTIM;
 	spinlock_release(&coremap_lock);
 	kfree(clean_index);
 	kfree(dirty_index);
 
-	// Make  decisions victim page
+// Make  decisions victim page
 	int result = evict_page(s_index, pstate);
 	if (result)
 	{
@@ -490,7 +490,7 @@ void page_free(struct page_table_entry *pte){
 
 int evict_page(int c_index, page_state pstate)
 {
-	/************ RB:Clear the easy cases first ************/
+/************ RB:Clear the easy cases first ************/
 	if (pstate == PS_FREE)
 	{
 		return 0;
@@ -498,7 +498,7 @@ int evict_page(int c_index, page_state pstate)
 		panic("Selected a non selectable page\n");
 		return EINVAL;
 	}
-	/************ RB:On to swapping decisions ************/
+/************ RB:On to swapping decisions ************/
 	vaddr_t ev_vaddr = coremap[c_index].va;
 	struct addrspace * ev_as = coremap[c_index].as;
 	int result = allcpu_tlbshootdown(ev_vaddr, ev_as);
@@ -513,95 +513,95 @@ int evict_page(int c_index, page_state pstate)
 	if (pstate == PS_DIRTY)
 	{
 		lock_acquire(pte_lock);
-		evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
-		lock_release(pte_lock);
+evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
+lock_release(pte_lock);
 
-		int result = swap_out(evict_pte);
-		if (result)
-		{
-			panic("Swap space exhausted\n" );
-			return result;
-		}
-		lock_acquire(pte_lock);
-		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
-		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
-		cv_broadcast(pte_cv,pte_lock);
-		lock_release(pte_lock);
+int result = swap_out(evict_pte);
+if (result)
+{
+	panic("Swap space exhausted\n" );
+	return result;
+}
+lock_acquire(pte_lock);
+evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
+evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
+cv_broadcast(pte_cv,pte_lock);
+lock_release(pte_lock);
 
-	}
-	KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
-	evict_pte->paddr = 0;
-	return 0;
+}
+KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
+evict_pte->paddr = 0;
+return 0;
 }
 
 int
 swap_out(struct page_table_entry *pte)
 {
-    if (swap_node == NULL)
-    {
-        // int err = vfs_open((char *)"lhd0raw:",O_RDWR,0,&swap_node);
-        // if(err != 0)
-        // {
-        //     return err;
-        // }
-        int err = vfs_open((char *)"swapfile", O_RDWR|O_CREAT|O_TRUNC, 0, &swap_node);
-        if (err != 0) {
-        	return err;
-        }
-    }
+	if (swap_node == NULL)
+	{
+// int err = vfs_open((char *)"lhd0raw:",O_RDWR,0,&swap_node);
+// if(err != 0)
+// {
+//     return err;
+// }
+		int err = vfs_open((char *)"swapfile", O_RDWR|O_CREAT|O_TRUNC, 0, &swap_node);
+		if (err != 0) {
+			return err;
+		}
+	}
 
-    KASSERT(pte != NULL);
-    lock_acquire(swap_lock);
-    if (pte->pte_state.swap_index < 0)
-    {
-    	for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
-    	{
-    		if (swapped_pages[i] == 'U')
-    		{
-    			pte->pte_state.swap_index = i;
-    			swapped_pages[i] = 'A';
-    			break;
-    		}
-    	}
-    	if (pte->pte_state.swap_index < 0)
-    	{
-    		lock_release(swap_lock);
-    		return ENOMEM;
-    	}
-    }
-    lock_release(swap_lock);
+	KASSERT(pte != NULL);
+	lock_acquire(swap_lock);
+	if (pte->pte_state.swap_index < 0)
+	{
+		for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
+		{
+			if (swapped_pages[i] == 'U')
+			{
+				pte->pte_state.swap_index = i;
+				swapped_pages[i] = 'A';
+				break;
+			}
+		}
+		if (pte->pte_state.swap_index < 0)
+		{
+			lock_release(swap_lock);
+			return ENOMEM;
+		}
+	}
+	lock_release(swap_lock);
 
-  	struct iovec iov;
+	struct iovec iov;
 	struct uio ku;
 	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
 		pte->pte_state.swap_index*PAGE_SIZE, UIO_WRITE);
-    int result = VOP_WRITE(swap_node, &ku);
-    if (result)
-    {
-    	panic("Errno: %d, write failed",result);
-    	return result;
-    }
+	int result = VOP_WRITE(swap_node, &ku);
+	if (result)
+	{
+		panic("Errno: %d, write failed",result);
+		return result;
+	}
 
-    return 0;
+	return 0;
 }
 
 int
 swap_in(struct page_table_entry *pte)
 {
 
-    KASSERT(pte != NULL);
-    KASSERT(pte->paddr != 0);
-    KASSERT(pte->pte_state.swap_index >= 0);
-    KASSERT(swap_node != NULL);
+	KASSERT(pte != NULL);
+	KASSERT(pte->paddr != 0);
+	KASSERT(pte->pte_state.swap_index >= 0);
+	KASSERT(swap_node != NULL);
 
-  	struct iovec iov;
+	struct iovec iov;
 	struct uio ku;
 	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
 		pte->pte_state.swap_index*PAGE_SIZE, UIO_READ);
-    int result = VOP_READ(swap_node, &ku);
-    if (result)
-    {
-    	return result;
-    }
-    return 0;
+	int result = VOP_READ(swap_node, &ku);
+	if (result)
+	{
+		return result;
+	}
+	return 0;
 }
