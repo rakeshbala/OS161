@@ -210,8 +210,9 @@ copy_page_table(struct addrspace *newas,
 
 void print_page_table(struct page_table_entry *page_table){
 	while(page_table != NULL){
-		kprintf("vaddr: %lx paddr:%lx\n",(unsigned long int)page_table->vaddr,
-			(unsigned long int) page_table->paddr);
+		const char *ondisk = ((page_table->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)?"YES":"NO";
+		kprintf("vaddr: %lx paddr:%lx swap_index: %d on_disk: %s\n",(unsigned long int)page_table->vaddr,
+			(unsigned long int) page_table->paddr, page_table->pte_state.swap_index,ondisk);
 		page_table = page_table->next;
 	}
 }
@@ -397,11 +398,9 @@ add_pte(struct addrspace *as, vaddr_t vaddr, paddr_t paddr)
 	}
 	new_entry->vaddr = vaddr & PAGE_FRAME;
 	new_entry->paddr = paddr;
-	// new_entry->on_disk = false;
 	new_entry->next = NULL;
 	new_entry->pte_state.pte_lock_ondisk = 0;
 	new_entry->pte_state.swap_index = -1;
-	// new_entry->permission = 0;
 
 	if (as->page_table == NULL)
 	{
