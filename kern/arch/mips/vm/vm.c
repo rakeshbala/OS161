@@ -128,68 +128,62 @@ getppages(unsigned long npages)
 vaddr_t
 alloc_kpages(int npages)
 {
-	KASSERT(npages == 1);
+
+	int start_index = -1;
+	page_state victims[npages];
 
 	if (vm_is_bootstrapped == true)
 	{
-// int book_size = coremap_size-search_start;
-		page_state pstate = 0;
-		int clean_index[10];
-		int clean_count = 0;
-		int dirty_index[10];
-		int dirty_count = 0;
-		int s_index = -1;
-
 		spinlock_acquire(&coremap_lock);
 		for (unsigned int i = 0; i < coremap_size; ++i)
 		{
-			if (coremap[i].p_state == PS_FREE)
+			if (coremap[i].p_state == PS_FREE ||
+				coremap[i].p_state == PS_CLEAN ||
+				coremap[i].p_state == PS_DIRTY)
 			{
-				s_index = i;
-				pstate = PS_FREE;
-				break;
-			}else if(coremap[i].p_state == PS_CLEAN){
-				if (clean_count <10)
+				bool allFree = true;
+				for (unsigned int j = i+1; j < ((unsigned int)npages+i) && j<coremap_size; ++j)
 				{
-					clean_index[clean_count]=i;
-					clean_count++;
+					if (coremap[j].p_state == PS_FIXED
+						|| coremap[j].p_state == PS_VICTIM)
+					{
+						allFree = false;
+						break;
+					}
 				}
-			}else if(coremap[i].p_state == PS_DIRTY){
-				if (dirty_count <10)
+				if (allFree)
 				{
-					dirty_index[dirty_count]=i;
-					dirty_count++;
+					start_index = i;
+					for (int j = 0; j < npages; ++j)
+					{
+						victims[j]=coremap[i+j].p_state;
+						coremap[i+j].p_state = PS_VICTIM;
+					}
+					break;
 				}
 			}
-		}
 
-		if (s_index == -1)
-		{
-			if (clean_count > 5)
-			{
-				s_index = clean_index[random()%10];
-				pstate = PS_CLEAN;
-			}else{
-				KASSERT(dirty_count > 0);
-				s_index = dirty_index[random()%10];
-				pstate = PS_DIRTY;
-			}
 		}
-		coremap[s_index].p_state = PS_VICTIM;
 		spinlock_release(&coremap_lock);
 
-		KASSERT(s_index != -1);
-
-		paddr_t pa = s_index*PAGE_SIZE;
-		int result = evict_page(s_index,pstate);
-		if (result)
+		if (start_index == -1)
 		{
 			return 0;
 		}
-		coremap[s_index].p_state = PS_FIXED;
-		coremap[s_index].chunk_size = npages;
-		coremap[s_index].va = PADDR_TO_KVADDR(pa);
-		coremap[s_index].as = NULL;
+		paddr_t pa = start_index*PAGE_SIZE;
+		unsigned int limit = npages + start_index;
+		for (unsigned i = start_index; i < limit && i< coremap_size; ++i)
+		{
+			int result = evict_page(i,victims[i-start_index]);
+			if (result)
+			{
+				return 0;
+			}
+			coremap[i].p_state = PS_FIXED;
+			coremap[i].chunk_size = npages;
+			coremap[i].va = PADDR_TO_KVADDR(pa);
+			coremap[i].as = NULL;
+		}
 		bzero((void *)PADDR_TO_KVADDR(pa), npages * PAGE_SIZE);
 		return PADDR_TO_KVADDR(pa);
 
@@ -257,103 +251,103 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	ax_permssion region_perm;
 	as = curthread->t_addrspace;
 	if (as == NULL) {
-return EFAULT; //as not setup
-}
-int result = vm_validitycheck(faultaddress, curthread->t_addrspace, &region_perm);
-if (result == false)
-{
-	return EFAULT;
-}
-DEBUG(DB_VM, "VM: fault: 0x%x\n", faultaddress);
-switch (faulttype) {
-	case VM_FAULT_READONLY:
-	if (!((region_perm & AX_WRITE) == AX_WRITE))
+		return EFAULT; //as not setup
+	}
+	int result = vm_validitycheck(faultaddress, curthread->t_addrspace, &region_perm);
+	if (result == false)
 	{
 		return EFAULT;
 	}
-	break;
-	case VM_FAULT_READ:
-	if (!((region_perm & AX_READ) == AX_READ))
-	{
-		return EFAULT;
+	DEBUG(DB_VM, "VM: fault: 0x%x\n", faultaddress);
+	switch (faulttype) {
+		case VM_FAULT_READONLY:
+		if (!((region_perm & AX_WRITE) == AX_WRITE))
+		{
+			return EFAULT;
+		}
+		break;
+		case VM_FAULT_READ:
+		if (!((region_perm & AX_READ) == AX_READ))
+		{
+			return EFAULT;
+		}
+		region_perm &= AX_READ;
+		break;
+		case VM_FAULT_WRITE:
+		if (!((region_perm & AX_WRITE) == AX_WRITE))
+		{
+			return EFAULT;
+		}
+		break;
+		default:
+		return EINVAL;
 	}
-	region_perm &= AX_READ;
-	break;
-	case VM_FAULT_WRITE:
-	if (!((region_perm & AX_WRITE) == AX_WRITE))
-	{
-		return EFAULT;
-	}
-	break;
-	default:
-	return EINVAL;
-}
 
-/************ RB:Check if page fault ************/
-struct page_table_entry *pte = get_pte(as->page_table,faultaddress);
-if (pte == NULL)
-{
-	pte = add_pte(as, faultaddress, 0);
+	/************ RB:Check if page fault ************/
+	struct page_table_entry *pte = get_pte(as->page_table,faultaddress);
 	if (pte == NULL)
 	{
-		return ENOMEM;
-	}
-}
-/************ RB:Prevent access while swapping ************/
-lock_acquire(pte_lock);
-if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
-{
-	cv_wait(pte_cv,pte_lock);
-}
-lock_release(pte_lock);
-
-if (pte->paddr == 0)
-{
-/************ RB:Allocate since it is page fault ************/
-	result = page_alloc(pte,as);
-	if (result !=0) return ENOMEM;
-	KASSERT(pte->paddr != 0);
-	int core_index = pte->paddr/PAGE_SIZE;
-	if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
-	{
-		int result = swap_in(pte);
-		if (result)
+		pte = add_pte(as, faultaddress, 0);
+		if (pte == NULL)
 		{
-			panic("Swap in read failed\n");
+			return ENOMEM;
 		}
-		coremap[core_index].p_state = PS_CLEAN;
-	}else{
-		coremap[core_index].p_state = PS_DIRTY;
 	}
-}
-int core_index = pte->paddr/PAGE_SIZE;
-KASSERT(coremap[core_index].p_state != PS_VICTIM);
+	/************ RB:Prevent access while swapping ************/
+	lock_acquire(pte_lock);
+	if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
+	{
+		cv_wait(pte_cv,pte_lock);
+	}
+	lock_release(pte_lock);
 
-/* make sure it's page-aligned */
-KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
+	if (pte->paddr == 0)
+	{
+	/************ RB:Allocate since it is page fault ************/
+		result = page_alloc(pte,as);
+		if (result !=0) return ENOMEM;
+		KASSERT(pte->paddr != 0);
+		int core_index = pte->paddr/PAGE_SIZE;
+		if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
+		{
+			int result = swap_in(pte);
+			if (result)
+			{
+				panic("Swap in read failed\n");
+			}
+			coremap[core_index].p_state = PS_CLEAN;
+		}else{
+			coremap[core_index].p_state = PS_DIRTY;
+		}
+	}
+	int core_index = pte->paddr/PAGE_SIZE;
+	KASSERT(coremap[core_index].p_state != PS_VICTIM);
 
-/* Disable interrupts on this CPU while frobbing the TLB. */
-spl = splhigh();
-ehi = faultaddress;
-if ((region_perm & AX_WRITE) == AX_WRITE)
-{
-	coremap[core_index].p_state = PS_DIRTY;
-	pte->pte_state.pte_lock_ondisk &= ~(PTE_ONDISK);
-	elo = pte->paddr | TLBLO_DIRTY | TLBLO_VALID;
-}else{
-	elo = pte->paddr|TLBLO_VALID;
-}
-DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
+	/* make sure it's page-aligned */
+	KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
 
-int index = tlb_probe(ehi,0);
-if (index > 0)
-{
-	tlb_write(ehi,elo,index);
-}else{
-	tlb_random(ehi, elo);
-}
-splx(spl);
-return 0;
+	/* Disable interrupts on this CPU while frobbing the TLB. */
+	spl = splhigh();
+	ehi = faultaddress;
+	if ((region_perm & AX_WRITE) == AX_WRITE)
+	{
+		coremap[core_index].p_state = PS_DIRTY;
+		pte->pte_state.pte_lock_ondisk &= ~(PTE_ONDISK);
+		elo = pte->paddr | TLBLO_DIRTY | TLBLO_VALID;
+	}else{
+		elo = pte->paddr|TLBLO_VALID;
+	}
+	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
+
+	int index = tlb_probe(ehi,0);
+	if (index > 0)
+	{
+		tlb_write(ehi,elo,index);
+	}else{
+		tlb_random(ehi, elo);
+	}
+	splx(spl);
+	return 0;
 }
 
 bool
@@ -513,25 +507,24 @@ int evict_page(int c_index, page_state pstate)
 	if (pstate == PS_DIRTY)
 	{
 		lock_acquire(pte_lock);
-evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
-lock_release(pte_lock);
+		evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
+		lock_release(pte_lock);
 
-int result = swap_out(evict_pte);
-if (result)
-{
-	panic("Swap space exhausted\n" );
-	return result;
-}
-lock_acquire(pte_lock);
-evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
-evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
-cv_broadcast(pte_cv,pte_lock);
-lock_release(pte_lock);
-
-}
-KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
-evict_pte->paddr = 0;
-return 0;
+		int result = swap_out(evict_pte);
+		if (result)
+		{
+			panic("Swap space exhausted\n" );
+			return result;
+		}
+		lock_acquire(pte_lock);
+		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
+		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
+		cv_broadcast(pte_cv,pte_lock);
+		lock_release(pte_lock);
+	}
+	KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
+	evict_pte->paddr = 0;
+	return 0;
 }
 
 int
