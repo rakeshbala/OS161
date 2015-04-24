@@ -91,6 +91,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		kfree(newas);
 		return ENOMEM;
 	}
+	//debug
+	// print_page_table(newas->page_table);
+
 	KASSERT(newas->page_table != NULL);
 	result = copy_regions(old->regions, &(newas->regions));
 	if (result != 0)
@@ -157,29 +160,21 @@ copy_page_table(struct addrspace *newas,
 			memmove((void *)PADDR_TO_KVADDR(temp_paddr), (void *)page_buffer,
 				PAGE_SIZE);
 			lock_release(copy_lock);
-			coremap[temp_paddr/PAGE_SIZE].p_state = PS_DIRTY;
+			int cindex = temp_paddr/PAGE_SIZE;
+			coremap[cindex].p_state = PS_DIRTY;
+			coremap[cindex].as = newas;
+			KASSERT(coremap[cindex].p_state != PS_VICTIM && coremap[cindex].p_state != PS_FIXED);
+			if (oldpt->paddr == 0)
+			{
+				KASSERT((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
+			}
 		}else{
 			(*newpt)->paddr = 0;
 		}
 
-		lock_acquire(copy_lock);
 		if ((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
 		{
-			//copy into permanent buffer
-			struct iovec iov;
-			struct uio ku;
-			KASSERT(oldpt->pte_state.swap_index >= 0 );
-			KASSERT(swap_node != NULL);
-
-			uio_kinit(&iov, &ku, (void *)page_buffer, PAGE_SIZE,
-				oldpt->pte_state.swap_index*PAGE_SIZE, UIO_READ);
-			int result = VOP_READ(swap_node, &ku);
-			if (result)
-			{
-				kfree(*newpt);
-				return result;
-			}
-			//copy out from permanent buffer
+			/************ RB:Find a slot ************/
 			lock_acquire(swap_lock);
 			for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
 			{
@@ -197,7 +192,24 @@ copy_page_table(struct addrspace *newas,
 			}
 			lock_release(swap_lock);
 
+			//copy into permanent buffer
+			lock_acquire(copy_lock);
 
+			struct iovec iov;
+			struct uio ku;
+			KASSERT(oldpt->pte_state.swap_index >= 0 );
+			KASSERT(swap_node != NULL);
+
+			uio_kinit(&iov, &ku, (void *)page_buffer, PAGE_SIZE,
+				oldpt->pte_state.swap_index*PAGE_SIZE, UIO_READ);
+			int result = VOP_READ(swap_node, &ku);
+			if (result)
+			{
+				kfree(*newpt);
+				return result;
+			}
+
+			//copy out from permanent buffer
 			struct iovec iov2;
 			struct uio ku2;
 			uio_kinit(&iov2, &ku2, (void *)page_buffer, PAGE_SIZE,
@@ -212,9 +224,9 @@ copy_page_table(struct addrspace *newas,
 			if((*newpt)->paddr !=0 ){
 				coremap[(*newpt)->paddr/PAGE_SIZE].p_state = PS_CLEAN;
 			}
-
+			lock_release(copy_lock);
 		}
-		lock_release(copy_lock);
+
 		(*newpt)->paddr = temp_paddr;
 		KASSERT(temp_paddr <= coremap_size * PAGE_SIZE);
 

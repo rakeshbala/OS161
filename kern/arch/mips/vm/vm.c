@@ -140,7 +140,11 @@ alloc_kpages(int npages)
 		bool found = false;
 		while(found == false)
 		{
-			int i = search_start + random()%(coremap_size-search_start);
+			unsigned int i = search_start + random()%(coremap_size-search_start);
+			if (i+npages >= coremap_size)
+			{
+				continue;
+			}
 			if (coremap[i].p_state == PS_FREE
 				|| coremap[i].p_state == PS_CLEAN
 				|| coremap[i].p_state == PS_DIRTY)
@@ -148,6 +152,7 @@ alloc_kpages(int npages)
 				bool allFree = true;
 				for (unsigned int j = i+1; j < ((unsigned int)npages+i) && j<coremap_size; ++j)
 				{
+
 					if (coremap[j].p_state == PS_FIXED
 						|| coremap[j].p_state == PS_VICTIM)
 					{
@@ -332,7 +337,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 	int core_index = pte->paddr/PAGE_SIZE;
 	KASSERT(coremap[core_index].p_state != PS_VICTIM);
-	KASSERT(coremap[core_index].p_state != PS_VICTIM);
+	KASSERT(coremap[core_index].p_state != PS_FIXED);
 
 	/* make sure it's page-aligned */
 	KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
@@ -443,6 +448,7 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as, paddr_t *ret_padd
 	coremap[s_index].p_state = PS_VICTIM;
 	spinlock_release(&coremap_lock);
 
+
 // Make  decisions victim page
 	int result = evict_page(s_index, pstate);
 	if (result)
@@ -506,7 +512,7 @@ int evict_page(int c_index, page_state pstate)
 		panic("TLB shootdown failed\n");
 		return result;
 	}
-
+	KASSERT(coremap[c_index].p_state == PS_VICTIM);
 	if (pstate == PS_DIRTY)
 	{
 

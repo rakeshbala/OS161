@@ -83,7 +83,7 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 	int sig = 0;
 
 	/************ RB:Should be removed ************/
-	debugVM();
+	// debugVM();
 
 
 	KASSERT(code < NTRAPCODES);
