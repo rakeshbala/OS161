@@ -451,40 +451,40 @@ enter_new_process(int argc, userptr_t argv, vaddr_t stack, vaddr_t entry)
 
 void debugVM(void){
 	int x = splhigh();
-	// unsigned int i;
-	// int fixed_count=0;
+	unsigned int i;
+	int fixed_count=0;
 	kprintf("\n");
-	// for (i = 0; i < coremap_size; ++i)
-	// {
-	// 	if (coremap[i].va == 0)
-	// 	{
-	// 		continue;
-	// 	}else if (coremap[i].p_state == PS_FIXED){
-	// 		fixed_count++;
-	// 	}
-	// 	const char *state;
-	// 	switch (coremap[i].p_state){
-	// 		case PS_FREE:
-	// 			state = "FREE";
-	// 			break;
-	// 		case PS_FIXED:
-	// 			state = "FIXED";
-	// 			break;
-	// 		case PS_DIRTY:
-	// 			state = "DIRTY";
-	// 			break;
-	// 		case PS_CLEAN:
-	// 			state = "CLEAN";
-	// 			break;
-	// 		case PS_VICTIM:
-	// 			state = "VICTIM";
-	// 			break;
-	// 		default:
-	// 			state = "UNKNOWN";
-	// 	}
-	// 	kprintf("%d: vaddr:%lx as:%p state:%s\n",i,(unsigned long int)coremap[i].va
-	// 		,coremap[i].as, state );
-	// }
+	for (i = 0; i < coremap_size; ++i)
+	{
+		if (coremap[i].va == 0)
+		{
+			continue;
+		}else if (coremap[i].p_state == PS_FIXED){
+			fixed_count++;
+		}
+		const char *state;
+		switch (coremap[i].p_state){
+			case PS_FREE:
+				state = "FREE";
+				break;
+			case PS_FIXED:
+				state = "FIXED";
+				break;
+			case PS_DIRTY:
+				state = "DIRTY";
+				break;
+			case PS_CLEAN:
+				state = "CLEAN";
+				break;
+			case PS_VICTIM:
+				state = "VICTIM";
+				break;
+			default:
+				state = "UNKNOWN";
+		}
+		kprintf("%d: vaddr:%lx as:%p state:%s\n",i,(unsigned long int)coremap[i].va
+			,coremap[i].as, state );
+	}
 	kprintf("Swap array:\n");
 	for (int i = 0; i < MAX_SWAP_PG_NUM; ++i)
 	{
@@ -492,8 +492,8 @@ void debugVM(void){
 	}
 	kprintf("\nSearch start: %d\n",search_start);
 	kprintf("Address space: %p\n",curthread->t_addrspace);
-	// kprintf("Coremap last filled entry: %u/%d\n",i,coremap_size);
-	// kprintf("Number of kpages: %d\n",fixed_count);
+	kprintf("Coremap last filled entry: %u/%d\n",i,coremap_size);
+	kprintf("Number of kpages: %d\n",fixed_count);
 	kprintf("----\n");
 	print_page_table(curthread->t_addrspace->page_table);
 	splx(x);

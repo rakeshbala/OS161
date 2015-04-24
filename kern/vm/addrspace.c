@@ -52,7 +52,7 @@
 
 char swapped_pages[MAX_SWAP_PG_NUM];
 struct lock *swap_lock;
-
+struct lock *copy_lock;
 int copy_page_table(struct addrspace *newas,
 	struct page_table_entry *oldpt, struct page_table_entry **newpt);
 int copy_regions(struct region_entry *old_regions, struct region_entry **new_region);
@@ -127,13 +127,23 @@ copy_page_table(struct addrspace *newas,
 			return ENOMEM;
 		}
 		(*newpt)->vaddr = oldpt->vaddr;
+		(*newpt)->paddr = 0;
 		(*newpt)->pte_state.pte_lock_ondisk = 0;
 		(*newpt)->pte_state.swap_index = -1;
 		int result;
-		paddr_t temp_paddr;
+		paddr_t temp_paddr = 0;
+		lock_acquire(pte_lock);
+		while ((oldpt->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
+		{
+			cv_wait(pte_cv,pte_lock);
+		}
+		lock_release(pte_lock);
+
 		if (oldpt->paddr != 0 )
 		{
-
+			lock_acquire(copy_lock);
+			memmove((void *)page_buffer,(void *)PADDR_TO_KVADDR(oldpt->paddr),
+				PAGE_SIZE);
 			result = page_alloc(*newpt, newas, &temp_paddr);
 			if (result != 0)
 			{
@@ -141,14 +151,15 @@ copy_page_table(struct addrspace *newas,
 				return ENOMEM;
 			}
 			KASSERT(temp_paddr != 0);
-			memmove((void *)PADDR_TO_KVADDR(temp_paddr),
-				(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
+			memmove((void *)PADDR_TO_KVADDR(temp_paddr), (void *)page_buffer,
+				PAGE_SIZE);
+			lock_release(copy_lock);
 			coremap[temp_paddr/PAGE_SIZE].p_state = PS_DIRTY;
-			(*newpt)->paddr = temp_paddr;
 		}else{
 			(*newpt)->paddr = 0;
 		}
 
+		lock_acquire(copy_lock);
 		if ((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
 		{
 			//copy into permanent buffer
@@ -200,7 +211,8 @@ copy_page_table(struct addrspace *newas,
 			}
 
 		}
-
+		lock_release(copy_lock);
+		(*newpt)->paddr = temp_paddr;
 		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
 		if (result != 0)
 		{

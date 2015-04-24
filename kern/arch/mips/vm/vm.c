@@ -73,10 +73,12 @@ vm_bootstrap(void)
 	swap_lock = lock_create("SwapLock");
 	pte_lock = lock_create ("PTE_Lock");
 	pte_cv = cv_create("PTE_CV");
+	copy_lock = lock_create("CopyLock");
 
 	KASSERT(pte_lock != NULL);
 	KASSERT(pte_cv != NULL);
 	KASSERT(swap_lock != NULL);
+	KASSERT(copy_lock != NULL);
 
 // dbflags = dbflags | DB_VM;
 /************ RB:Accomodate for last address misalignment ************/
@@ -135,11 +137,13 @@ alloc_kpages(int npages)
 	if (vm_is_bootstrapped == true)
 	{
 		spinlock_acquire(&coremap_lock);
-		for (unsigned int i = 0; i < coremap_size; ++i)
+		bool found = false;
+		while(found == false)
 		{
+			int i = search_start + random()%(coremap_size-search_start);
 			if (coremap[i].p_state == PS_FREE
-				/*|| coremap[i].p_state == PS_CLEAN
-				|| coremap[i].p_state == PS_DIRTY*/)
+				|| coremap[i].p_state == PS_CLEAN
+				|| coremap[i].p_state == PS_DIRTY)
 			{
 				bool allFree = true;
 				for (unsigned int j = i+1; j < ((unsigned int)npages+i) && j<coremap_size; ++j)
@@ -153,6 +157,7 @@ alloc_kpages(int npages)
 				}
 				if (allFree)
 				{
+					found = true;
 					start_index = i;
 					for (int j = 0; j < npages; ++j)
 					{
