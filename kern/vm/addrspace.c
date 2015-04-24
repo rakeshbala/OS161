@@ -145,15 +145,13 @@ copy_page_table(struct addrspace *newas,
 		if (oldpt->paddr != 0 )
 		{
 			oldpt->pte_state.pte_lock_ondisk |= PTE_LOCKED;
-			page_state old_state = coremap[oldpt->paddr/PAGE_SIZE].p_state;
-			coremap[oldpt->paddr/PAGE_SIZE].p_state = PS_VICTIM;
+			// page_state old_state = coremap[oldpt->paddr/PAGE_SIZE].p_state;
+			// coremap[oldpt->paddr/PAGE_SIZE].p_state = PS_VICTIM;
 
 
 			lock_acquire(copy_lock);
 			KASSERT(oldpt->paddr <= coremap_size * PAGE_SIZE);
-
-			memmove((void *)page_buffer,(void *)PADDR_TO_KVADDR(oldpt->paddr),
-				PAGE_SIZE);
+			memmove((void *)page_buffer,(void *)PADDR_TO_KVADDR(oldpt->paddr),PAGE_SIZE);
 			result = page_alloc(*newpt, newas, &temp_paddr);
 			if (result != 0)
 			{
@@ -174,7 +172,7 @@ copy_page_table(struct addrspace *newas,
 				KASSERT((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
 			}
 			oldpt->pte_state.pte_lock_ondisk  &= ~(PTE_LOCKED);
-			coremap[oldpt->paddr/PAGE_SIZE].p_state = old_state;
+			// coremap[oldpt->paddr/PAGE_SIZE].p_state = old_state;
 		}else{
 			(*newpt)->paddr = 0;
 		}

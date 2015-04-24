@@ -314,10 +314,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 	lock_release(pte_lock);
 
+	paddr_t temp_paddr = 0;
 	if (pte->paddr == 0)
 	{
 	/************ RB:Allocate since it is page fault ************/
-		paddr_t temp_paddr;
 		result = page_alloc(pte,as, &temp_paddr);
 		if (result !=0) return ENOMEM;
 		KASSERT(temp_paddr != 0);
@@ -333,6 +333,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}else{
 			coremap[core_index].p_state = PS_DIRTY;
 		}
+		KASSERT(pte->paddr == 0);
 		pte->paddr = temp_paddr;
 	}
 	int core_index = pte->paddr/PAGE_SIZE;
@@ -484,6 +485,7 @@ void page_free(struct page_table_entry *pte){
 		KASSERT(pte->pte_state.swap_index >= 0);
 		lock_acquire(swap_lock);
 		swapped_pages[pte->pte_state.swap_index] = 'U';
+		pte->pte_state.swap_index = -1;
 		lock_release(swap_lock);
 	}
 }
