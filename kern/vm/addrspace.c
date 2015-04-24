@@ -144,6 +144,11 @@ copy_page_table(struct addrspace *newas,
 
 		if (oldpt->paddr != 0 )
 		{
+			oldpt->pte_state.pte_lock_ondisk |= PTE_LOCKED;
+			page_state old_state = coremap[oldpt->paddr/PAGE_SIZE].p_state;
+			coremap[oldpt->paddr/PAGE_SIZE].p_state = PS_VICTIM;
+
+
 			lock_acquire(copy_lock);
 			KASSERT(oldpt->paddr <= coremap_size * PAGE_SIZE);
 
@@ -168,6 +173,8 @@ copy_page_table(struct addrspace *newas,
 			{
 				KASSERT((oldpt->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
 			}
+			oldpt->pte_state.pte_lock_ondisk  &= ~(PTE_LOCKED);
+			coremap[oldpt->paddr/PAGE_SIZE].p_state = old_state;
 		}else{
 			(*newpt)->paddr = 0;
 		}

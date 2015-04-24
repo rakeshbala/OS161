@@ -445,6 +445,7 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as, paddr_t *ret_padd
 		}
 
 	}
+	KASSERT(s_index != -1);
 	coremap[s_index].p_state = PS_VICTIM;
 	spinlock_release(&coremap_lock);
 
