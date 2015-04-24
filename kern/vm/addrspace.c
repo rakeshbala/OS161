@@ -142,6 +142,8 @@ copy_page_table(struct addrspace *newas,
 		if (oldpt->paddr != 0 )
 		{
 			lock_acquire(copy_lock);
+			KASSERT(oldpt->paddr <= coremap_size * PAGE_SIZE);
+
 			memmove((void *)page_buffer,(void *)PADDR_TO_KVADDR(oldpt->paddr),
 				PAGE_SIZE);
 			result = page_alloc(*newpt, newas, &temp_paddr);
@@ -151,6 +153,7 @@ copy_page_table(struct addrspace *newas,
 				return ENOMEM;
 			}
 			KASSERT(temp_paddr != 0);
+			KASSERT(temp_paddr <= coremap_size * PAGE_SIZE);
 			memmove((void *)PADDR_TO_KVADDR(temp_paddr), (void *)page_buffer,
 				PAGE_SIZE);
 			lock_release(copy_lock);
@@ -213,6 +216,8 @@ copy_page_table(struct addrspace *newas,
 		}
 		lock_release(copy_lock);
 		(*newpt)->paddr = temp_paddr;
+		KASSERT(temp_paddr <= coremap_size * PAGE_SIZE);
+
 		result = copy_page_table(newas,oldpt->next,&((*newpt)->next));
 		if (result != 0)
 		{

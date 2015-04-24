@@ -176,6 +176,7 @@ alloc_kpages(int npages)
 			return 0;
 		}
 		paddr_t pa = start_index*PAGE_SIZE;
+		KASSERT(pa <= coremap_size * PAGE_SIZE);
 		unsigned int limit = npages + start_index;
 		for (unsigned i = start_index; i < limit && i< coremap_size; ++i)
 		{
@@ -186,6 +187,7 @@ alloc_kpages(int npages)
 			}
 			coremap[i].p_state = PS_FIXED;
 			coremap[i].chunk_size = npages;
+			KASSERT(pa <= coremap_size * PAGE_SIZE);
 			coremap[i].va = PADDR_TO_KVADDR(pa);
 			coremap[i].as = NULL;
 		}
@@ -330,6 +332,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}
 	int core_index = pte->paddr/PAGE_SIZE;
 	KASSERT(coremap[core_index].p_state != PS_VICTIM);
+	KASSERT(coremap[core_index].p_state != PS_VICTIM);
 
 	/* make sure it's page-aligned */
 	KASSERT((pte->paddr & PAGE_FRAME) == pte->paddr);
@@ -345,6 +348,8 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	}else{
 		elo = pte->paddr|TLBLO_VALID;
 	}
+	KASSERT(pte->paddr <= coremap_size * PAGE_SIZE);
+
 	DEBUG(DB_VM, "VM: 0x%x -> 0x%x\n", faultaddress, pte->paddr);
 
 	int index = tlb_probe(ehi,0);
@@ -405,21 +410,7 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as, paddr_t *ret_padd
 /************ RB:Find page for allocation ************/
 	int book_size = coremap_size-search_start;
 	page_state pstate = 0;
-	int *clean_index = (int *)kmalloc(book_size * sizeof(int));
-	if (clean_index == NULL)
-	{
-		return ENOMEM;
-	}
-	int clean_count = 0;
-	int *dirty_index = (int *)kmalloc(book_size * sizeof(int));
-	if (dirty_index == NULL)
-	{
-		kfree(clean_index);
-		return ENOMEM;
-	}
-	int dirty_count = 0;
 	int s_index = -1;
-
 	spinlock_acquire(&coremap_lock);
 	for (unsigned int i = 0; i < coremap_size; ++i)
 	{
@@ -428,30 +419,29 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as, paddr_t *ret_padd
 			s_index = i;
 			pstate = PS_FREE;
 			break;
-		}else if(coremap[i].p_state == PS_CLEAN){
-			clean_index[clean_count]=i;
-			clean_count++;
-		}else if(coremap[i].p_state == PS_DIRTY){
-			dirty_index[dirty_count]=i;
-			dirty_count++;
 		}
 	}
+
 	if (s_index == -1)
 	{
-		if (clean_count > 5)
-		{
-			s_index = clean_index[random()%clean_count];
-			pstate = PS_CLEAN;
-		}else{
-			KASSERT(dirty_count > 0);
-			s_index = dirty_index[random()%dirty_count];
-			pstate = PS_DIRTY;
+		while(s_index == -1){
+			unsigned int i = search_start+random()%book_size;
+			if (coremap[i].p_state == PS_CLEAN)
+			{
+				pstate = PS_CLEAN;
+				s_index = i;
+				break;
+			}else if(coremap[i].p_state == PS_DIRTY)
+			{
+				pstate = PS_DIRTY;
+				s_index = i;
+				break;
+			}
 		}
+
 	}
 	coremap[s_index].p_state = PS_VICTIM;
 	spinlock_release(&coremap_lock);
-	kfree(clean_index);
-	kfree(dirty_index);
 
 // Make  decisions victim page
 	int result = evict_page(s_index, pstate);
@@ -465,6 +455,7 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as, paddr_t *ret_padd
 	coremap[s_index].va = pte->vaddr & PAGE_FRAME;
 	coremap[s_index].as = as;
 	*ret_paddr = s_index*PAGE_SIZE;
+	KASSERT(*ret_paddr <= coremap_size * PAGE_SIZE);
 	bzero((void *)PADDR_TO_KVADDR(*ret_paddr), PAGE_SIZE);
 	return 0;
 }
@@ -575,6 +566,8 @@ swap_out(struct page_table_entry *pte)
 
 	struct iovec iov;
 	struct uio ku;
+	KASSERT(pte->paddr <= coremap_size * PAGE_SIZE);
+
 	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
 		pte->pte_state.swap_index*PAGE_SIZE, UIO_WRITE);
 	int result = VOP_WRITE(swap_node, &ku);
@@ -598,6 +591,8 @@ swap_in(struct page_table_entry *pte, paddr_t paddr)
 
 	struct iovec iov;
 	struct uio ku;
+	KASSERT(paddr <= coremap_size * PAGE_SIZE);
+
 	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(paddr), PAGE_SIZE,
 		pte->pte_state.swap_index*PAGE_SIZE, UIO_READ);
 	int result = VOP_READ(swap_node, &ku);
