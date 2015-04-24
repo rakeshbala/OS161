@@ -133,7 +133,7 @@ alloc_kpages(int npages)
 
 	int start_index = -1;
 	page_state victims[npages];
-
+	// KASSERT(npages == 1);
 	if (vm_is_bootstrapped == true)
 	{
 		spinlock_acquire(&coremap_lock);
@@ -514,10 +514,13 @@ int evict_page(int c_index, page_state pstate)
 		return result;
 	}
 	KASSERT(coremap[c_index].p_state == PS_VICTIM);
+	paddr_t paddr = evict_pte->paddr;
+	evict_pte->paddr = 0;
+
 	if (pstate == PS_DIRTY)
 	{
 
-		int result = swap_out(evict_pte);
+		int result = swap_out(evict_pte, paddr);
 		if (result)
 		{
 			panic("Swap space exhausted\n" );
@@ -525,7 +528,6 @@ int evict_page(int c_index, page_state pstate)
 		}
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
 	}
-	evict_pte->paddr = 0;
 	lock_acquire(pte_lock);
 	evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
 	cv_broadcast(pte_cv,pte_lock);
@@ -535,15 +537,10 @@ int evict_page(int c_index, page_state pstate)
 }
 
 int
-swap_out(struct page_table_entry *pte)
+swap_out(struct page_table_entry *pte, paddr_t swap_paddr)
 {
 	if (swap_node == NULL)
 	{
-// int err = vfs_open((char *)"lhd0raw:",O_RDWR,0,&swap_node);
-// if(err != 0)
-// {
-//     return err;
-// }
 		int err = vfs_open((char *)"swapfile", O_RDWR|O_CREAT|O_TRUNC, 0, &swap_node);
 		if (err != 0) {
 			return err;
@@ -573,9 +570,9 @@ swap_out(struct page_table_entry *pte)
 
 	struct iovec iov;
 	struct uio ku;
-	KASSERT(pte->paddr <= coremap_size * PAGE_SIZE);
+	KASSERT(swap_paddr <= coremap_size * PAGE_SIZE);
 
-	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
+	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(swap_paddr), PAGE_SIZE,
 		pte->pte_state.swap_index*PAGE_SIZE, UIO_WRITE);
 	int result = VOP_WRITE(swap_node, &ku);
 	if (result)

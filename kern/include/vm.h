@@ -96,7 +96,7 @@ int page_alloc (struct page_table_entry* pte, struct addrspace *as , paddr_t *pa
 void page_free(struct page_table_entry *pte);
 int evict_page(int c_index, page_state pstate);
 
-int swap_out(struct page_table_entry *pte);
+int swap_out(struct page_table_entry *pte, paddr_t paddr);
 int swap_in(struct page_table_entry *pte, paddr_t paddr);
 
 #endif /* _VM_H_ */
