@@ -1422,9 +1422,7 @@ allcpu_tlbshootdown(vaddr_t vaddr, struct addrspace *as)
 
 	for (i=0; i < cpuarray_num(&allcpus); i++) {
 		c = cpuarray_get(&allcpus, i);
-		if (c != curcpu->c_self) {
-			ipi_tlbshootdown(c, (const struct tlbshootdown *)&tlb_wrap);
-		}
+		ipi_tlbshootdown(c, (const struct tlbshootdown *)&tlb_wrap);
 	}
 	return 0;
 }

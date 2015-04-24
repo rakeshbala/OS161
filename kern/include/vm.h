@@ -91,11 +91,11 @@ void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
 
 /************ RB:User page allocation methods ************/
-int page_alloc (struct page_table_entry* pte, struct addrspace *as);
+int page_alloc (struct page_table_entry* pte, struct addrspace *as , paddr_t *paddr);
 void page_free(struct page_table_entry *pte);
 int evict_page(int c_index, page_state pstate);
 
 int swap_out(struct page_table_entry *pte);
-int swap_in(struct page_table_entry *pte);
+int swap_in(struct page_table_entry *pte, paddr_t paddr);
 
 #endif /* _VM_H_ */

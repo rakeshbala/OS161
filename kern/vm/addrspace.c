@@ -130,18 +130,21 @@ copy_page_table(struct addrspace *newas,
 		(*newpt)->pte_state.pte_lock_ondisk = 0;
 		(*newpt)->pte_state.swap_index = -1;
 		int result;
+		paddr_t temp_paddr;
 		if (oldpt->paddr != 0 )
 		{
-			result = page_alloc(*newpt, newas);
+
+			result = page_alloc(*newpt, newas, &temp_paddr);
 			if (result != 0)
 			{
 				kfree(*newpt);
 				return ENOMEM;
 			}
-			KASSERT((*newpt)->paddr != 0);
-			memmove((void *)PADDR_TO_KVADDR((*newpt)->paddr),
+			KASSERT(temp_paddr != 0);
+			memmove((void *)PADDR_TO_KVADDR(temp_paddr),
 				(void *)PADDR_TO_KVADDR(oldpt->paddr), PAGE_SIZE);
-			coremap[(*newpt)->paddr/PAGE_SIZE].p_state = PS_DIRTY;
+			coremap[temp_paddr/PAGE_SIZE].p_state = PS_DIRTY;
+			(*newpt)->paddr = temp_paddr;
 		}else{
 			(*newpt)->paddr = 0;
 		}
@@ -179,6 +182,7 @@ copy_page_table(struct addrspace *newas,
 				return ENOMEM;
 			}
 			lock_release(swap_lock);
+
 
 			struct iovec iov2;
 			struct uio ku2;

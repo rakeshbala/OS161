@@ -137,9 +137,9 @@ alloc_kpages(int npages)
 		spinlock_acquire(&coremap_lock);
 		for (unsigned int i = 0; i < coremap_size; ++i)
 		{
-			if (coremap[i].p_state == PS_FREE ||
-				coremap[i].p_state == PS_CLEAN ||
-				coremap[i].p_state == PS_DIRTY)
+			if (coremap[i].p_state == PS_FREE
+				/*|| coremap[i].p_state == PS_CLEAN
+				|| coremap[i].p_state == PS_DIRTY*/)
 			{
 				bool allFree = true;
 				for (unsigned int j = i+1; j < ((unsigned int)npages+i) && j<coremap_size; ++j)
@@ -293,9 +293,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 			return ENOMEM;
 		}
 	}
+
 	/************ RB:Prevent access while swapping ************/
 	lock_acquire(pte_lock);
-	if ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
+	while ((pte->pte_state.pte_lock_ondisk & PTE_LOCKED) == PTE_LOCKED)
 	{
 		cv_wait(pte_cv,pte_lock);
 	}
@@ -304,13 +305,14 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	if (pte->paddr == 0)
 	{
 	/************ RB:Allocate since it is page fault ************/
-		result = page_alloc(pte,as);
+		paddr_t temp_paddr;
+		result = page_alloc(pte,as, &temp_paddr);
 		if (result !=0) return ENOMEM;
-		KASSERT(pte->paddr != 0);
-		int core_index = pte->paddr/PAGE_SIZE;
+		KASSERT(temp_paddr != 0);
+		int core_index = temp_paddr/PAGE_SIZE;
 		if ((pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK)
 		{
-			int result = swap_in(pte);
+			int result = swap_in(pte, temp_paddr);
 			if (result)
 			{
 				panic("Swap in read failed\n");
@@ -319,6 +321,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		}else{
 			coremap[core_index].p_state = PS_DIRTY;
 		}
+		pte->paddr = temp_paddr;
 	}
 	int core_index = pte->paddr/PAGE_SIZE;
 	KASSERT(coremap[core_index].p_state != PS_VICTIM);
@@ -392,7 +395,7 @@ vm_validitycheck(vaddr_t faultaddress,struct addrspace* pas, ax_permssion *perm)
 
 /************ RB:User page allocation. Always returns a PS_VICTIM page ************/
 int
-page_alloc(struct page_table_entry *pte, struct addrspace *as){
+page_alloc(struct page_table_entry *pte, struct addrspace *as, paddr_t *ret_paddr){
 
 /************ RB:Find page for allocation ************/
 	int book_size = coremap_size-search_start;
@@ -456,8 +459,8 @@ page_alloc(struct page_table_entry *pte, struct addrspace *as){
 	coremap[s_index].chunk_size = 1;
 	coremap[s_index].va = pte->vaddr & PAGE_FRAME;
 	coremap[s_index].as = as;
-	pte->paddr = s_index*PAGE_SIZE;
-	bzero((void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE);
+	*ret_paddr = s_index*PAGE_SIZE;
+	bzero((void *)PADDR_TO_KVADDR(*ret_paddr), PAGE_SIZE);
 	return 0;
 }
 
@@ -495,6 +498,12 @@ int evict_page(int c_index, page_state pstate)
 /************ RB:On to swapping decisions ************/
 	vaddr_t ev_vaddr = coremap[c_index].va;
 	struct addrspace * ev_as = coremap[c_index].as;
+
+	struct page_table_entry *evict_pte = get_pte(ev_as->page_table,ev_vaddr);
+	KASSERT(evict_pte != NULL);
+	lock_acquire(pte_lock);
+	evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
+	lock_release(pte_lock);
 	int result = allcpu_tlbshootdown(ev_vaddr, ev_as);
 	if (result)
 	{
@@ -502,13 +511,8 @@ int evict_page(int c_index, page_state pstate)
 		return result;
 	}
 
-	struct page_table_entry *evict_pte = get_pte(ev_as->page_table,ev_vaddr);
-	KASSERT(evict_pte != NULL);
 	if (pstate == PS_DIRTY)
 	{
-		lock_acquire(pte_lock);
-		evict_pte->pte_state.pte_lock_ondisk |= PTE_LOCKED; //lock
-		lock_release(pte_lock);
 
 		int result = swap_out(evict_pte);
 		if (result)
@@ -516,14 +520,14 @@ int evict_page(int c_index, page_state pstate)
 			panic("Swap space exhausted\n" );
 			return result;
 		}
-		lock_acquire(pte_lock);
 		evict_pte->pte_state.pte_lock_ondisk |= PTE_ONDISK;
-		evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
-		cv_broadcast(pte_cv,pte_lock);
-		lock_release(pte_lock);
 	}
-	KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
 	evict_pte->paddr = 0;
+	lock_acquire(pte_lock);
+	evict_pte->pte_state.pte_lock_ondisk &= ~(PTE_LOCKED); //unlock
+	cv_broadcast(pte_cv,pte_lock);
+	lock_release(pte_lock);
+	KASSERT((evict_pte->pte_state.pte_lock_ondisk & PTE_ONDISK) == PTE_ONDISK);
 	return 0;
 }
 
@@ -579,17 +583,17 @@ swap_out(struct page_table_entry *pte)
 }
 
 int
-swap_in(struct page_table_entry *pte)
+swap_in(struct page_table_entry *pte, paddr_t paddr)
 {
 
 	KASSERT(pte != NULL);
-	KASSERT(pte->paddr != 0);
+	KASSERT(paddr != 0);
 	KASSERT(pte->pte_state.swap_index >= 0);
 	KASSERT(swap_node != NULL);
 
 	struct iovec iov;
 	struct uio ku;
-	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(pte->paddr), PAGE_SIZE,
+	uio_kinit(&iov, &ku, (void *)PADDR_TO_KVADDR(paddr), PAGE_SIZE,
 		pte->pte_state.swap_index*PAGE_SIZE, UIO_READ);
 	int result = VOP_READ(swap_node, &ku);
 	if (result)
